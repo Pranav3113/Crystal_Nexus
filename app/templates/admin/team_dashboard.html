@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Team Dashboard | Crystal Nexus{% endblock %}
+{% block header %}Team Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div class="text-muted">
+    Team under <span class="fw-semibold">{{ current_user.name }}</span>
+    • <span class="fw-semibold">{{ team_count }}</span> member(s)
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('admin.team_structure') }}">
+      <i class="bi bi-diagram-3 me-1"></i> Team Structure
+    </a>
+    <a class="btn btn-outline-primary" href="{{ url_for('admin.dashboard') }}">
+      <i class="bi bi-speedometer2 me-1"></i> Dashboard
+    </a>
+  </div>
+</div>
+
+{% if not team_rows %}
+  <div class="alert alert-info shadow-soft">
+    No team members assigned under you.
+  </div>
+{% else %}
+
+  {% if totals %}
+  <div class="row g-3 mb-3">
+    <div class="col-md-3">
+      <div class="card shadow-soft p-3 h-100">
+        <div class="text-muted small">Team Leads</div>
+        <div class="fs-4 fw-bold">{{ totals.kpi.lead_total }}</div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card shadow-soft p-3 h-100">
+        <div class="text-muted small">Team Clients (linked)</div>
+        <div class="fs-4 fw-bold">{{ totals.kpi.clients }}</div>
+        <div class="text-muted small">Distinct clients from team leads</div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card shadow-soft p-3 h-100">
+        <div class="text-muted small">Verified Payments</div>
+        <div class="fs-4 fw-bold">{{ totals.kpi.payments.get('Verified', 0) }}</div>
+        <div class="text-muted small">
+          Pending: {{ totals.kpi.payments.get('Pending', 0) }} •
+          Rejected: {{ totals.kpi.payments.get('Rejected', 0) }}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card shadow-soft p-3 h-100">
+        <div class="text-muted small">Outstanding (Quotes)</div>
+        <div class="fs-4 fw-bold">{{ totals.kpi.outstanding }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card shadow-soft">
+    <div class="card-header bg-white d-flex align-items-center justify-content-between">
+      <div class="fw-semibold">
+        <i class="bi bi-people me-2"></i> Team Members
+      </div>
+      <span class="badge text-bg-light">{{ team_count }} member(s)</span>
+    </div>
+
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle mb-0">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th class="text-end">Leads</th>
+              <th class="text-end">Clients</th>
+              <th class="text-end">Verified</th>
+              <th class="text-end">Pending</th>
+              <th class="text-end">Rejected</th>
+              <th class="text-end">Outstanding</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in team_rows %}
+              <tr>
+                <td class="fw-semibold">
+                  <div class="d-flex flex-column">
+                    <span>{{ r.user.name }}</span>
+                    <span class="text-muted small">{{ r.user.email }}</span>
+                  </div>
+                </td>
+
+                <td class="text-end">{{ r.leads }}</td>
+                <td class="text-end">{{ r.clients }}</td>
+
+                <td class="text-end">
+                  <span class="badge text-bg-success">{{ r.verified }}</span>
+                </td>
+
+                <td class="text-end">
+                  <span class="badge text-bg-warning">{{ r.pending }}</span>
+                </td>
+
+                <td class="text-end">
+                  <span class="badge text-bg-danger">{{ r.rejected }}</span>
+                </td>
+
+                <td class="text-end fw-semibold">{{ r.outstanding }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="text-muted small mt-2">
+        <div>• Clients = distinct <code>Lead.client_id</code> from leads owned by the user</div>
+        <div>• Outstanding = total quote amount (created by user) minus non-rejected collections</div>
+        <div>• Payments totals are based on <code>payment_collections.created_by_id</code></div>
+      </div>
+    </div>
+  </div>
+
+{% endif %}
+
+{% endblock %}

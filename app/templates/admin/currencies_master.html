@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Currency Master{% endblock %}
+{% block header %}Currency Master{% endblock %}
+
+{% block content %}
+<style>
+  .btn-orange { background:#f57c00; border-color:#f57c00; color:#fff; }
+  .btn-orange:hover { filter: brightness(0.95); color:#fff; }
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+  .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">Currency Master</h4>
+    <div class="text-muted small">Manage currencies used in quotes/invoices.</div>
+  </div>
+</div>
+
+<div class="card card-soft mb-3">
+  <div class="card-body">
+    <form method="post" class="row g-2 align-items-end">
+      <input type="hidden" name="action" value="create">
+
+      <div class="col-12 col-md-2">
+        <label class="form-label">Code</label>
+        <input class="form-control" name="code" placeholder="INR" maxlength="10" required>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">Name</label>
+        <input class="form-control" name="name" placeholder="Indian Rupee" required>
+      </div>
+
+      <div class="col-12 col-md-2">
+        <label class="form-label">Symbol</label>
+        <input class="form-control" name="symbol" placeholder="₹">
+      </div>
+
+      <div class="col-12 col-md-2">
+        <label class="form-label">Sort</label>
+        <input class="form-control mono" name="sort_order" value="1" inputmode="numeric">
+      </div>
+
+      <div class="col-12 col-md-2 d-flex gap-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_active" value="1" checked id="cActive">
+          <label class="form-check-label" for="cActive">Active</label>
+        </div>
+
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="gst_applicable" value="1" id="cGst">
+          <label class="form-check-label" for="cGst">GST</label>
+        </div>
+      </div>
+
+      <div class="col-12 d-flex justify-content-end">
+        <button class="btn btn-orange">
+          <i class="bi bi-plus-circle me-1"></i>Add Currency
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card card-soft">
+  <div class="card-body table-responsive">
+    <table class="table align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Code</th>
+          <th>Name</th>
+          <th>Symbol</th>
+          <th class="text-center">GST</th>
+          <th class="text-center">Active</th>
+          <th class="text-end">Sort</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in items %}
+        <tr>
+          <form method="post">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="currency_id" value="{{ c.id }}">
+
+            <td style="min-width:110px">
+              <input class="form-control" name="code" value="{{ c.code }}">
+            </td>
+            <td style="min-width:240px">
+              <input class="form-control" name="name" value="{{ c.name }}">
+            </td>
+            <td style="min-width:120px">
+              <input class="form-control" name="symbol" value="{{ c.symbol or '' }}">
+            </td>
+
+            <td class="text-center">
+              <input class="form-check-input" type="checkbox" name="gst_applicable" value="1"
+                     {% if c.gst_applicable %}checked{% endif %}>
+            </td>
+
+            <td class="text-center">
+              <input class="form-check-input" type="checkbox" name="is_active" value="1"
+                     {% if c.is_active %}checked{% endif %}>
+            </td>
+
+            <td class="text-end" style="min-width:110px">
+              <input class="form-control text-end mono" name="sort_order" value="{{ c.sort_order or 1 }}">
+            </td>
+
+            <td class="text-end" style="min-width:180px">
+              <button class="btn btn-sm btn-primary">
+                <i class="bi bi-save2 me-1"></i>Save
+              </button>
+          </form>
+
+              <form method="post" class="d-inline">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="currency_id" value="{{ c.id }}">
+                <button class="btn btn-sm btn-outline-danger"
+                        onclick="return confirm('Delete currency {{ c.code }}?');">
+                  <i class="bi bi-trash me-1"></i>Delete
+                </button>
+              </form>
+            </td>
+        </tr>
+        {% endfor %}
+
+        {% if items|length == 0 %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">No currencies created yet.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

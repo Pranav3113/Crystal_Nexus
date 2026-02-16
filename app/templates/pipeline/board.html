@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Pipeline • Crystal Nexus{% endblock %}
+{% block header %}Pipeline{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Pipeline Board</h4>
+    <div class="text-muted">Drag-drop coming next. For now, quick move per card.</div>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('pipeline.create') }}">
+    <i class="bi bi-plus-lg me-1"></i> New Opportunity
+  </a>
+</div>
+
+<div class="row g-3" style="overflow-x:auto;">
+  {% for s in stages %}
+  <div class="col-12 col-md-6 col-lg-4 col-xl-3">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="fw-semibold">
+            <span class="badge text-bg-{{ s.color }} me-1">{{ s.name }}</span>
+            <span class="text-muted small">{{ s.probability }}%</span>
+          </div>
+          <span class="badge text-bg-light">{{ grouped[s.id]|length }}</span>
+        </div>
+
+        <div class="vstack gap-2">
+          {% for o in grouped[s.id] %}
+
+            {% set is_closed = (s.name in closed_stage_names) %}
+            {% set is_overdue = (o.expected_close_date and o.expected_close_date < today and not is_closed) %}
+
+            <div class="p-3 rounded-4 border {% if is_overdue %}border-danger bg-danger-subtle{% else %}bg-light{% endif %}">
+              <div class="fw-semibold">{{ o.title }}</div>
+
+              <div class="text-muted small d-flex justify-content-between align-items-center">
+                <div>{{ o.opp_code }} • {{ o.company or '—' }}</div>
+                {% if is_overdue %}
+                  <span class="badge text-bg-danger">Overdue</span>
+                {% endif %}
+              </div>
+
+              {# ✅ Expected Close Date #}
+              {% if o.expected_close_date %}
+                <div class="small mt-1">
+                  <i class="bi bi-calendar-event me-1"></i>
+                  <span class="{% if is_overdue %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                    {{ o.expected_close_date.strftime("%d %b %Y") }}
+                  </span>
+                </div>
+              {% endif %}
+
+              {# ✅ Lead link (optional) #}
+              {% if o.lead %}
+                <div class="text-muted small mt-2">
+                  <i class="bi bi-link-45deg me-1"></i>
+                  <a class="text-decoration-none" href="{{ url_for('leads.view_lead', lead_id=o.lead.id) }}">
+                    {{ o.lead.lead_code }} • {{ o.lead.name }}
+                  </a>
+                </div>
+              {% endif %}
+
+              {# ✅ Create Quote should not depend on lead existence #}
+              <a class="btn btn-sm btn-outline-primary mt-2 w-100"
+                 href="{{ url_for('quotes.create_quote', opp_id=o.id) }}">
+                <i class="bi bi-receipt me-1"></i> Create Quote
+              </a>
+
+              <div class="text-muted small mt-2">
+                <i class="bi bi-person me-1"></i>{{ o.owner.name if o.owner else '—' }}
+                {% if o.expected_value %}
+                  <span class="ms-2"><i class="bi bi-currency-rupee me-1"></i>{{ o.expected_value }}</span>
+                {% endif %}
+              </div>
+
+              <form class="mt-2 d-flex gap-2" method="post" action="{{ url_for('pipeline.move', opp_id=o.id) }}">
+                <select class="form-select form-select-sm" name="to_stage_id" required>
+                  {% for s2 in stages %}
+                    <option value="{{ s2.id }}" {% if o.stage_id==s2.id %}selected{% endif %}>{{ s2.name }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-sm btn-outline-dark">Move</button>
+              </form>
+            </div>
+          {% endfor %}
+
+          {% if grouped[s.id]|length == 0 %}
+            <div class="text-muted small text-center py-4">No opportunities</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

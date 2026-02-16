@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Invoice Requests{% endblock %}
+{% block header %}Invoice Requests{% endblock %}
+
+{% block content %}
+<style>
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+  .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+</style>
+
+<div class="card card-soft">
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2">
+      <div>
+        <h5 class="mb-0">Pending Invoice Requests</h5>
+        <div class="text-muted small">Only quotes with Invoice Request = Pending</div>
+      </div>
+      <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('invoices.list_invoices') }}">
+        <i class="bi bi-receipt me-1"></i>All Invoices
+      </a>
+    </div>
+
+    <div class="table-responsive mt-3">
+      <table class="table align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Quote</th>
+            <th>Opportunity</th>
+            <th>Requested</th>
+            <th class="text-end">Amount</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for q in items %}
+          {% set pi = (q.proformas.filter_by(status='Issued').order_by(q.proformas.entity.id.desc()).first() if false else None) %}
+          <tr>
+            <td>
+              <div class="fw-semibold">{{ q.quote_code }}</div>
+              <div class="text-muted small">Status: {{ q.status.name if q.status else '—' }}</div>
+            </td>
+
+            <td>
+              {% if q.opportunity %}
+                <div class="fw-semibold">{{ q.opportunity.opp_code }}</div>
+                <div class="text-muted small">{{ q.opportunity.title }}</div>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              <div class="mono">
+                {{ q.invoice_requested_at.strftime('%d-%b-%Y %H:%M') if q.invoice_requested_at else '—' }}
+              </div>
+              {% if q.invoice_requested_by %}
+                <div class="text-muted small">by {{ q.invoice_requested_by.name }}</div>
+              {% endif %}
+              {% if q.invoice_request_note %}
+                <div class="text-muted small" style="white-space: pre-wrap;">{{ q.invoice_request_note }}</div>
+              {% endif %}
+            </td>
+
+            <td class="text-end mono">
+              ₹ {{ "{:,.2f}".format((q.total_amount or 0)|float) }}
+            </td>
+
+            <td class="text-end">
+              <a class="btn btn-outline-dark btn-sm"
+                 href="{{ url_for('quotes.view_quote', quote_id=q.id) }}">
+                <i class="bi bi-eye me-1"></i>Open Quote
+              </a>
+
+              {# Finance should generate from PI view (since route needs pi_id). #}
+              <a class="btn btn-dark btn-sm"
+                 href="{{ url_for('quotes.view_quote', quote_id=q.id) }}"
+                 title="Open quote → View PI → Generate Invoice">
+                <i class="bi bi-receipt-cutoff me-1"></i>Generate
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-4">
+              No pending invoice requests ✅
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

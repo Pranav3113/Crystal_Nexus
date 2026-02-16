@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block header %}Proforma Invoices{% endblock %}
+{% block content %}
+
+<style>
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+</style>
+
+<div class="card card-soft p-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">All Proforma Invoices</h5>
+    <div class="text-muted">Total: {{ items|length }}</div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>PI No</th>
+          <th>Date</th>
+          <th>Client</th>
+          <th class="text-end">Amount</th>
+          <th>Status</th>
+          <th style="width:160px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if items|length == 0 %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              No Proforma Invoices found.
+            </td>
+          </tr>
+        {% else %}
+          {% for pi in items %}
+          <tr>
+            <td><strong>{{ pi.pi_no }}</strong></td>
+            <td>{{ pi.pi_date }}</td>
+            <td>{{ pi.client.company_name if pi.client else "-" }}</td>
+            <td class="text-end">₹ {{ "%.2f"|format(pi.total_amount|float) }}</td>
+            <td>
+              {% if pi.status == "Issued" %}
+                <span class="badge bg-primary">Issued</span>
+              {% elif pi.status == "Converted" %}
+                <span class="badge bg-success">Converted</span>
+              {% elif pi.status == "Cancelled" %}
+                <span class="badge bg-danger">Cancelled</span>
+              {% else %}
+                <span class="badge bg-secondary">{{ pi.status }}</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('proforma.view_pi', pi_id=pi.id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                View
+              </a>
+              <a href="{{ url_for('proforma.download_pi', pi_id=pi.id) }}"
+                 class="btn btn-sm btn-outline-secondary">
+                PDF
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

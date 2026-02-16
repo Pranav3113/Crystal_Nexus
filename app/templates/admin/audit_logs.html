@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Audit Logs{% endblock %}
+{% block header %}Audit Logs{% endblock %}
+
+{% block content %}
+<div class="card shadow-soft">
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Time</th>
+          <th>User</th>
+          <th>Entity</th>
+          <th>Action</th>
+          <th>Field</th>
+          <th>Old</th>
+          <th>New</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in logs %}
+        <tr>
+          <td class="small">{{ l.performed_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td>{{ l.performed_by.name if l.performed_by else 'System' }}</td>
+          <td>{{ l.entity }} #{{ l.entity_id }}</td>
+          <td><span class="badge text-bg-dark">{{ l.action }}</span></td>
+          <td>{{ l.field or '—' }}</td>
+          <td class="small text-muted">{{ l.old_value or '—' }}</td>
+          <td class="small">{{ l.new_value or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

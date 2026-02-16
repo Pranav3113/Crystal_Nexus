@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Cluster Productivity{% endblock %}
+{% block header %}Revenue Productivity (MTD){% endblock %}
+
+{% block content %}
+<style>
+  .kpi { font-size: 1.25rem; font-weight: 800; }
+  .muted { color:#6c757d; }
+  .badge-soft { padding:.4rem .6rem; border-radius:999px; font-weight:700; }
+  .b-green { background: rgba(25,135,84,.15); color:#146c43; }
+  .b-amber { background: rgba(245,124,0,.15); color:#c25f00; }
+  .b-red { background: rgba(220,53,69,.15); color:#b02a37; }
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+  .row-red { background: rgba(220,53,69,.06); }
+  .row-amber { background: rgba(245,124,0,.06); }
+  .row-green { background: rgba(25,135,84,.06); }
+
+  @media print{
+    .no-print{ display:none !important; }
+    .card, .card-soft { box-shadow:none !important; }
+    body { background:#fff !important; }
+  }
+</style>
+
+{% set cluster_label = (cluster.name if cluster else "All Clusters") %}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+  <form method="get" class="d-flex gap-2 align-items-end no-print">
+
+    <div>
+      <label class="form-label mb-1">Month</label>
+      <input type="month" class="form-control" name="month" value="{{ month_value }}">
+    </div>
+
+    <div>
+      <label class="form-label mb-1">Cluster Head</label>
+      <select class="form-select" name="cluster_id">
+        <option value="">All Clusters</option>
+        {% for c in clusters %}
+          <option value="{{ c.id }}" {% if cluster_id == (c.id|string) %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+        {% endfor %}
+      </select>
+      <div class="text-muted small mt-1">Cluster = Head + reporting tree</div>
+    </div>
+
+    <div class="pb-1 d-flex gap-2">
+      <button class="btn btn-outline-dark">
+        <i class="bi bi-funnel me-1"></i>Apply
+      </button>
+
+      <a class="btn btn-dark"
+         href="{{ url_for('reports.cluster_productivity', month=month_value, cluster_id=cluster_id, format='pdf') }}">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
+      </a>
+    </div>
+  </form>
+
+  <div class="text-muted small text-end">
+    <div>
+      Cluster: <span class="fw-semibold">{{ cluster_label }}</span>
+    </div>
+    <div>
+      Period: <span class="fw-semibold">{{ start_date }}</span> to <span class="fw-semibold">{{ end_date }}</span>
+      • Days elapsed: <span class="fw-semibold">{{ days_elapsed }}/{{ days_in_month }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-md-3">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Total Revenue (MTD)</div>
+        <div class="kpi">{{ "%.2f"|format(total_revenue or 0) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-3">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Avg Productivity (Revenue ÷ CTC)</div>
+        <div class="kpi">{{ "%.2f"|format(avg_productivity or 0) }}×</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-2">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Green</div>
+        <div class="kpi">{{ green_count }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-2">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Amber</div>
+        <div class="kpi">{{ amber_count }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-2">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Red</div>
+        <div class="kpi">{{ red_count }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-soft">
+  <div class="card-body">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <div class="fw-semibold">
+        Employee Productivity
+        <span class="text-muted small ms-2">({{ cluster_label }})</span>
+      </div>
+      <div class="text-muted small">
+        Benchmarks: BD ≥ <b>15×</b> CTC • AM ≥ <b>25×</b> CTC
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Employee</th>
+            <th>Role</th>
+            <th class="text-end">Monthly CTC</th>
+            <th class="text-end">Revenue (MTD)</th>
+            <th class="text-end">Productivity</th>
+            <th class="text-end">Required MTD</th>
+            <th class="text-end">Gap</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            {% set row_cls = 'row-red' if r.status=='Red' else ('row-amber' if r.status=='Amber' else 'row-green') %}
+            <tr class="{{ row_cls }}">
+              <td>
+                <div class="fw-semibold">{{ r.user.name }}</div>
+                <div class="text-muted small">{{ r.user.email }}</div>
+              </td>
+              <td><span class="badge text-bg-light text-dark">{{ r.role }}</span></td>
+              <td class="text-end">{{ "%.2f"|format(r.monthly_ctc or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(r.revenue_mtd or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(r.productivity or 0) }}×</td>
+              <td class="text-end">{{ "%.2f"|format(r.required_mtd or 0) }}</td>
+              <td class="text-end">
+                {% set gap = r.run_rate_gap or 0 %}
+                <span class="{% if gap < 0 %}text-danger{% else %}text-success{% endif %}">
+                  {{ "%.2f"|format(gap) }}
+                </span>
+              </td>
+              <td>
+                {% if r.status=='Green' %}
+                  <span class="badge-soft b-green">Green</span>
+                {% elif r.status=='Amber' %}
+                  <span class="badge-soft b-amber">Amber</span>
+                {% else %}
+                  <span class="badge-soft b-red">Red</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+
+          {% if rows|length == 0 %}
+            <tr><td colspan="8" class="text-center text-muted p-5">No data</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="text-muted small mt-2">
+      Status logic: Green if MTD revenue ≥ required MTD run-rate; Amber if ≥ 80% of required MTD; else Red.
+    </div>
+  </div>
+</div>
+{% endblock %}

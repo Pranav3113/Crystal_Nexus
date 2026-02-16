@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Leads • Crystal Nexus{% endblock %}
+{% block header %}Leads{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Lead Master</h4>
+    <div class="text-muted">Search, filter and manage leads quickly.</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary" href="{{ url_for('leads.import_leads') }}">
+      <i class="bi bi-upload me-1"></i> Import Excel
+    </a>
+    <a class="btn btn-primary" href="{{ url_for('leads.create_lead') }}">
+      <i class="bi bi-plus-lg me-1"></i> New Lead
+    </a>
+  </div>
+</div>
+
+<div class="card shadow-soft mb-3">
+  <div class="card-body">
+    <form class="row g-2 align-items-end" method="get">
+      <div class="col-12 col-md-4">
+        <label class="form-label">Search</label>
+        <input class="form-control" name="q" value="{{ q }}" placeholder="Name, company, email, phone, lead code...">
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status_id">
+          <option value="">All</option>
+          {% for s in statuses %}
+            <option value="{{ s.id }}" {% if status_id|int == s.id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label class="form-label">Source</label>
+        <select class="form-select" name="source_id">
+          <option value="">All</option>
+          {% for s in sources %}
+            <option value="{{ s.id }}" {% if source_id|int == s.id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label class="form-label">Service</label>
+        <select class="form-select" name="service_id">
+          <option value="">All</option>
+          {% for s in services %}
+            <option value="{{ s.id }}" {% if service_id|int == s.id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label class="form-label">Owner</label>
+        <select class="form-select" name="owner">
+          <option value="" {% if owner == '' %}selected{% endif %}>
+            {% if allowed_owner_ids is none %}All{% else %}My + Team{% endif %}
+          </option>
+
+          <option value="me" {% if owner == 'me' %}selected{% endif %}>Only Mine</option>
+
+          {% if owner_options and owner_options|length > 1 %}
+            <optgroup label="Team / Users">
+              {% for u in owner_options %}
+                {% if u.id != current_user.id %}
+                  <option value="{{ u.id }}" {% if owner|int == u.id %}selected{% endif %}>
+                    {{ u.name }}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </optgroup>
+          {% endif %}
+        </select>
+      </div>
+
+      <div class="col-12 col-md-2 d-grid">
+        <button class="btn btn-dark"><i class="bi bi-search me-1"></i> Apply</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-soft">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Lead</th>
+          <th>Company</th>
+          <th>Contact</th>
+          <th>Status</th>
+          <th>Source</th>
+          <th>Service</th>
+          <th>Owner</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lead in pagination.items %}
+        <tr>
+          <td>
+            <div class="fw-semibold">
+              <a class="text-decoration-none" href="{{ url_for('leads.view_lead', lead_id=lead.id) }}">{{ lead.name }}</a>
+            </div>
+            <div class="text-muted small">{{ lead.lead_code }} • {{ lead.location or '—' }}</div>
+          </td>
+          <td>
+            <div>{{ lead.company or '—' }}</div>
+            <div class="text-muted small">
+              {{ lead.industry.name if lead.industry else '—' }}
+            </div>
+          </td>
+          <td>
+            <div class="small"><i class="bi bi-envelope me-1"></i>{{ lead.email or '—' }}</div>
+            <div class="small">
+              <i class="bi bi-telephone me-1"></i>
+              {% if lead.phone %}
+                {{ lead.phone_country or '' }} {{ lead.phone }}
+              {% else %}
+                —
+              {% endif %}
+            </div>
+          </td>
+          <td>
+            {% if lead.status %}
+              <span class="badge text-bg-{{ lead.status.color }}">{{ lead.status.name }}</span>
+            {% else %}
+              <span class="badge text-bg-secondary">—</span>
+            {% endif %}
+          </td>
+          <td>{{ lead.source.name if lead.source else '—' }}</td>
+          <td>{{ lead.service.name if lead.service else '—' }}</td>
+          <td>{{ lead.owner.name if lead.owner else '—' }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('leads.edit_lead', lead_id=lead.id) }}">
+              <i class="bi bi-pencil-square me-1"></i>Edit
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+
+        {% if pagination.total == 0 %}
+        <tr>
+          <td colspan="8" class="text-center p-5">
+            <div class="text-muted">No leads found. Try changing filters or create a new lead.</div>
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagination.pages > 1 %}
+  <div class="card-footer bg-white d-flex align-items-center justify-content-between">
+    <div class="small text-muted">
+      Page {{ pagination.page }} of {{ pagination.pages }} • Total {{ pagination.total }}
+    </div>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        {% set args = request.args.to_dict() %}
+
+        {% if pagination.has_prev %}
+          {% set _ = args.update({'page': pagination.prev_num}) %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('leads.list_leads', **args) }}">Prev</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Prev</span></li>
+        {% endif %}
+
+        <li class="page-item disabled"><span class="page-link">{{ pagination.page }}</span></li>
+
+        {% if pagination.has_next %}
+          {% set _ = args.update({'page': pagination.next_num}) %}
+          <li class="page-item"><a class="page-link" href="{{ url_for('leads.list_leads', **args) }}">Next</a></li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

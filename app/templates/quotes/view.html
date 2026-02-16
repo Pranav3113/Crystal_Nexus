@@ -1,0 +1,579 @@
+{% extends "base.html" %}
+{% block title %}Quote{% endblock %}
+{% block header %}Quotes{% endblock %}
+
+{% block content %}
+<style>
+  .shadow-soft { box-shadow: 0 6px 18px rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.06); border-radius: 14px; }
+  .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  .w-140 { width: 140px; }
+  .w-160 { width: 160px; }
+  .w-180 { width: 180px; }
+  .small-muted { color:#64748b; font-size:.85rem; }
+  .chip { padding: .25rem .55rem; border-radius: 999px; font-size:.75rem; background: #f1f5f9; }
+</style>
+
+{% set today_date = today %}
+{% set is_overdue = q.estimated_closure_date and q.estimated_closure_date < today_date
+   and q.status and q.status.name not in ("Selected","Rejected") %}
+
+{% set proposal_done = q.proposal_created_at is not none %}
+{% set proposal_confirmed = q.proposal_confirmed_at is not none %}
+
+{# ---- Currency / Symbol ---- #}
+{% set currency_map = {} %}
+{% if currencies is defined %}
+  {% for c in currencies %}
+    {% set _ = currency_map.update({(c.code|upper): (c.symbol or c.code)}) %}
+  {% endfor %}
+{% endif %}
+{% set cur_code = (q.currency or "INR")|upper %}
+{% set cur_symbol = currency_map.get(cur_code, cur_code) %}
+
+{# ---- GST Applicability (strict INR only) ---- #}
+{% set gst_enabled = (cur_code == "INR") and (q.is_gst_applicable) %}
+{% set is_intrastate = gst_enabled and (q.cgst and q.cgst > 0) %}
+
+{# ---- PI State ---- #}
+{% set pi_exists = (latest_pi is not none) %}
+{% set pi_pending = (q.pi_request_status == "Pending") %}
+
+{# ---- Invoice State ---- #}
+{% set inv_exists = (latest_invoice is not none) %}
+{% set inv_pending = (q.invoice_request_status == "Pending") %}
+
+{% macro money(v) -%}
+  {{ "{:,.2f}".format((v or 0) | float) }}
+{%- endmacro %}
+
+<!-- ================= HEADER ================= -->
+
+{% if q.status and q.status.name in ("Selected","Sent") %}
+  {% if q.project %}
+    <a class="btn btn-outline-dark"
+       href="{{ url_for('projects.view_project', project_id=q.project.id) }}">
+      <i class="bi bi-kanban me-1"></i>Open Project
+    </a>
+  {% else %}
+    <form method="post" class="d-inline m-0"
+          action="{{ url_for('projects.create_from_quote', quote_id=q.id) }}"
+          onsubmit="return confirm('Create a project for this quote?');">
+      <button class="btn btn-dark" type="submit">
+        <i class="bi bi-kanban me-1"></i>Create Project
+      </button>
+    </form>
+  {% endif %}
+{% endif %}
+
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <div class="text-muted small">{{ q.quote_code }} • Version {{ q.version }}</div>
+    <h4 class="mb-0">Quote</h4>
+    <div class="text-muted small">
+      Opportunity: {{ q.opportunity.opp_code }} • {{ q.opportunity.title }}
+    </div>
+
+    <div class="mt-1 small">
+      <span class="chip">
+        Currency: <b>{{ cur_code }}</b>{% if cur_symbol and cur_symbol != cur_code %} ({{ cur_symbol }}){% endif %}
+      </span>
+
+      {% if gst_enabled %}
+        <span class="chip">GST: <b>ON</b></span>
+      {% elif cur_code == "INR" %}
+        <span class="chip">GST: <b>OFF</b></span>
+      {% else %}
+        <span class="chip">GST: <b>N/A</b></span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2">
+
+    {# Edit only in Draft/Rejected #}
+    {% if q.status and q.status.name in ("Draft","Rejected") %}
+      <a class="btn btn-outline-primary"
+         href="{{ url_for('quotes.edit_quote', quote_id=q.id) }}">
+        <i class="bi bi-pencil-square me-1"></i>Edit
+      </a>
+    {% endif %}
+
+    {# New version always available if status exists #}
+    {% if q.status %}
+      <form method="post"
+            action="{{ url_for('quotes.create_new_version', quote_id=q.id) }}"
+            class="d-inline m-0">
+        <button class="btn btn-outline-dark" type="submit">
+          <i class="bi bi-layers me-1"></i>New Version
+        </button>
+      </form>
+    {% endif %}
+
+    {# ✅ STEP 1: Approved/Sent (not linked) -> Convert to Client => Selected #}
+    {% if q.status and q.status.name in ("Approved","Sent") and not q.client_id %}
+      <button type="button" class="btn btn-primary"
+              data-bs-toggle="modal" data-bs-target="#convertToClientModal">
+        <i class="bi bi-building-add me-1"></i>Convert to Client
+      </button>
+    {% endif %}
+
+    {# ✅ STEP 2: Selected/Sent -> Proposal Builder #}
+    {% if q.status and q.status.name in ("Selected","Sent") %}
+      <a class="btn btn-outline-primary"
+         href="{{ url_for('quotes.proposal_builder', quote_id=q.id) }}">
+        <i class="bi bi-file-earmark-text me-1"></i>
+        {% if proposal_done %}View Proposal{% else %}Create Proposal{% endif %}
+      </a>
+    {% endif %}
+
+    {# ✅ Proposal download (only if created + status Selected/Sent) #}
+    {% if q.status and q.status.name in ("Selected","Sent") and proposal_done %}
+      <a class="btn btn-outline-dark"
+         href="{{ url_for('quotes.download_proposal', quote_id=q.id) }}">
+        <i class="bi bi-download me-1"></i>Download
+      </a>
+    {% endif %}
+
+    {# ✅ STEP 3: Mark Sent (only if Selected + proposal created) #}
+    {% if q.status and q.status.name == "Selected" and proposal_done %}
+      <form method="post" action="{{ url_for('quotes.mark_sent', quote_id=q.id) }}" class="d-inline m-0">
+        <button class="btn btn-success" type="submit"
+                onclick="return confirm('Mark this proposal as Sent?');">
+          <i class="bi bi-send-check me-1"></i>Mark Sent
+        </button>
+      </form>
+    {% endif %}
+
+    {# ================= Billing Flow Actions ================= #}
+
+    {% if q.status and q.status.name == "Sent" and proposal_done and not proposal_confirmed %}
+      <form method="post" action="{{ url_for('quotes.confirm_proposal', quote_id=q.id) }}" class="d-inline m-0">
+        <button class="btn btn-success" type="submit"
+                onclick="return confirm('Confirm proposal? Payments will be enabled after confirmation.');">
+          <i class="bi bi-check2-circle me-1"></i>Confirm Proposal
+        </button>
+      </form>
+    {% endif %}
+
+    {% if proposal_confirmed %}
+      <a class="btn btn-outline-success"
+         href="{{ url_for('payments.quote_payments', quote_id=q.id) }}">
+        <i class="bi bi-cash-coin me-1"></i>Payments
+      </a>
+    {% else %}
+      <button class="btn btn-outline-secondary" type="button" disabled
+              title="Payments will be enabled after proposal confirmation.">
+        <i class="bi bi-lock me-1"></i>Payments
+      </button>
+    {% endif %}
+
+    {# ================= PI FLOW (Sales Request + Finance Generate) ================= #}
+
+    {% if pi_exists %}
+      <a class="btn btn-outline-dark"
+         href="{{ url_for('proforma.view_pi', pi_id=latest_pi.id) }}">
+        <i class="bi bi-receipt me-1"></i>View PI
+      </a>
+    {% endif %}
+
+    {% if (not pi_exists) and proposal_confirmed and q.status and q.status.name == "Sent"
+          and (not pi_pending) and current_user.has_perm("proforma.request") %}
+      <form method="post" class="d-inline m-0"
+            action="{{ url_for('quotes.request_pi', quote_id=q.id) }}"
+            onsubmit="return confirm('Send PI request to Finance?');">
+        <input type="hidden" name="pi_request_note" value="">
+        <button class="btn btn-outline-dark" type="submit">
+          <i class="bi bi-send me-1"></i>Request PI
+        </button>
+      </form>
+    {% endif %}
+
+    {% if (not pi_exists) and pi_pending and current_user.has_perm("proforma.generate") %}
+      <form method="post"
+            class="d-inline m-0"
+            action="{{ url_for('proforma.create_pi_from_quote', quote_id=q.id) }}"
+            onsubmit="return confirm('Generate Proforma Invoice now?');">
+        <button class="btn btn-dark" type="submit">
+          <i class="bi bi-receipt me-1"></i>Generate PI
+        </button>
+      </form>
+    {% endif %}
+
+    {# ================= INVOICE FLOW (Sales Request + Finance Generate) ================= #}
+
+    {% if inv_exists %}
+      <a class="btn btn-outline-secondary"
+         href="{{ url_for('invoices.view_invoice', invoice_id=latest_invoice.id) }}">
+        <i class="bi bi-file-earmark-text me-1"></i>View Invoice
+      </a>
+    {% endif %}
+
+    {% if pi_exists and (not inv_exists) and proposal_confirmed and q.status and q.status.name == "Sent"
+          and (not inv_pending) and current_user.has_perm("invoices.request") %}
+      <form method="post" class="d-inline m-0"
+            action="{{ url_for('quotes.request_invoice', quote_id=q.id) }}"
+            onsubmit="return confirm('Send Invoice request to Finance?');">
+        <input type="hidden" name="invoice_request_note" value="">
+        <button class="btn btn-outline-secondary" type="submit">
+          <i class="bi bi-send me-1"></i>Request Invoice
+        </button>
+      </form>
+    {% endif %}
+
+    {% if pi_exists and (not inv_exists) and inv_pending and current_user.has_perm("invoices.generate") %}
+      <form method="post"
+            class="d-inline m-0"
+            action="{{ url_for('invoices.create_invoice_from_pi', pi_id=latest_pi.id) }}"
+            onsubmit="return confirm('Generate Invoice now?');">
+        <button class="btn btn-secondary" type="submit">
+          <i class="bi bi-file-earmark-text me-1"></i>Generate Invoice
+        </button>
+      </form>
+    {% endif %}
+
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- ================= LEFT ================= -->
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-soft">
+      <div class="card-body">
+
+        <div class="fw-semibold mb-2">Items</div>
+
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Item</th>
+                <th class="w-180">Service</th>
+                <th class="w-160">Billing</th>
+                <th class="w-140">Qty</th>
+                <th class="w-160">Rate</th>
+                <th class="w-160 text-end">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in items %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ it.item_name }}</div>
+                  {% if it.description %}
+                    <div class="text-muted small">{{ it.description }}</div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if it.service %}
+                    <span class="badge text-bg-light border">{{ it.service.name }}</span>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% set bc = (it.billing_cycle or 'ONETIME')|upper %}
+                  <span class="badge text-bg-light border">
+                    {{ bc.replace("_"," ").title() }}
+                  </span>
+                </td>
+
+                <td class="mono">{{ it.qty or 0 }}</td>
+                <td class="mono">{{ money(it.rate) }}</td>
+                <td class="fw-semibold text-end mono">{{ cur_symbol }} {{ money(it.amount) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if q.customer_notes %}
+          <hr>
+          <div class="fw-semibold">Customer Notes</div>
+          <div class="text-muted" style="white-space: pre-wrap;">{{ q.customer_notes }}</div>
+        {% endif %}
+
+        {% if q.notes %}
+          <hr>
+          <div class="fw-semibold">Internal Notes</div>
+          <div class="text-muted" style="white-space: pre-wrap;">{{ q.notes }}</div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RIGHT ================= -->
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+
+        <!-- ✅ STATUS + DETAILS (not missed) -->
+        <div class="fw-semibold mb-2">Status Details</div>
+
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="text-muted">Quote Status</div>
+          <span class="badge text-bg-dark">{{ q.status.name if q.status else '—' }}</span>
+        </div>
+
+        {% if q.status_updated_at %}
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="text-muted">Updated At</div>
+            <div class="mono small">{{ q.status_updated_at.strftime('%d-%b-%Y %H:%M') }}</div>
+          </div>
+        {% endif %}
+
+        {% if q.status_updated_by %}
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="text-muted">Updated By</div>
+            <div class="small">{{ q.status_updated_by.name }}</div>
+          </div>
+        {% endif %}
+
+        {% if q.status_remark %}
+          <div class="mt-2 small-muted">
+            Remark:
+            <div class="text-muted" style="white-space: pre-wrap;">{{ q.status_remark }}</div>
+          </div>
+        {% endif %}
+
+        <hr>
+
+        {% if cur_code == "INR" %}
+          <div class="d-flex justify-content-between mb-1">
+            <div class="text-muted">Customer Billing State</div>
+            <div class="text-end">{{ q.billing_state or (q.branch.state if q.branch else '—') }}</div>
+          </div>
+          <div class="d-flex justify-content-between mb-1">
+            <div class="text-muted">Customer GSTIN</div>
+            <div class="text-end">{{ q.billing_gstin or (q.branch.gst if q.branch else '—') }}</div>
+          </div>
+          <hr>
+        {% endif %}
+
+        <!-- ✅ Billing Workflow Summary -->
+        <div class="fw-semibold mb-2">Billing Workflow</div>
+
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="text-muted">Proposal Created</div>
+          {% if proposal_done %}
+            <span class="badge text-bg-success">Yes</span>
+          {% else %}
+            <span class="badge text-bg-secondary">No</span>
+          {% endif %}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="text-muted">Proposal Confirmed</div>
+          {% if proposal_confirmed %}
+            <span class="badge text-bg-success">Yes</span>
+          {% else %}
+            <span class="badge text-bg-warning">Pending</span>
+          {% endif %}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="text-muted">Payments</div>
+          {% if proposal_confirmed %}
+            <span class="badge text-bg-success">Enabled</span>
+          {% else %}
+            <span class="badge text-bg-secondary">Locked</span>
+          {% endif %}
+        </div>
+
+        {% if proposal_confirmed %}
+          <div class="small-muted mt-2">
+            Confirmed at:
+            <span class="mono">
+              {{ q.proposal_confirmed_at.strftime('%d-%b-%Y %H:%M') if q.proposal_confirmed_at else '-' }}
+            </span>
+          </div>
+        {% endif %}
+
+        <hr>
+
+        <!-- ✅ PI Workflow Summary -->
+        <div class="fw-semibold mb-2">PI Workflow</div>
+
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="text-muted">PI Status</div>
+          {% if pi_exists %}
+            <span class="badge text-bg-success">Created</span>
+          {% elif pi_pending %}
+            <span class="badge text-bg-warning">Pending</span>
+          {% else %}
+            <span class="badge text-bg-secondary">—</span>
+          {% endif %}
+        </div>
+
+        {% if q.pi_requested_at %}
+          <div class="small-muted mt-1">
+            Requested: <span class="mono">{{ q.pi_requested_at.strftime('%d-%b-%Y %H:%M') }}</span>
+            {% if q.pi_requested_by %}
+              <div>by {{ q.pi_requested_by.name }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if q.pi_request_note %}
+          <div class="mt-2 small-muted">
+            Note:
+            <div class="text-muted" style="white-space: pre-wrap;">{{ q.pi_request_note }}</div>
+          </div>
+        {% endif %}
+
+        {% if pi_exists %}
+          <div class="mt-2">
+            <a class="btn btn-outline-dark btn-sm w-100"
+               href="{{ url_for('proforma.view_pi', pi_id=latest_pi.id) }}">
+              <i class="bi bi-receipt me-1"></i>Open PI
+            </a>
+          </div>
+        {% endif %}
+
+        <hr>
+
+        <!-- ✅ Invoice Workflow Summary -->
+        <div class="fw-semibold mb-2">Invoice Workflow</div>
+
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="text-muted">Invoice Status</div>
+          {% if inv_exists %}
+            <span class="badge text-bg-success">Created</span>
+          {% elif inv_pending %}
+            <span class="badge text-bg-warning">Pending</span>
+          {% else %}
+            <span class="badge text-bg-secondary">—</span>
+          {% endif %}
+        </div>
+
+        {% if q.invoice_requested_at %}
+          <div class="small-muted mt-1">
+            Requested: <span class="mono">{{ q.invoice_requested_at.strftime('%d-%b-%Y %H:%M') }}</span>
+            {% if q.invoice_requested_by %}
+              <div>by {{ q.invoice_requested_by.name }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if q.invoice_request_note %}
+          <div class="mt-2 small-muted">
+            Note:
+            <div class="text-muted" style="white-space: pre-wrap;">{{ q.invoice_request_note }}</div>
+          </div>
+        {% endif %}
+
+        {% if inv_exists %}
+          <div class="mt-2">
+            <a class="btn btn-outline-secondary btn-sm w-100"
+               href="{{ url_for('invoices.view_invoice', invoice_id=latest_invoice.id) }}">
+              <i class="bi bi-file-earmark-text me-1"></i>Open Invoice
+            </a>
+          </div>
+        {% endif %}
+
+        <hr>
+
+        <!-- FINANCIAL SUMMARY -->
+        <div class="fw-semibold mb-2">Financial Summary</div>
+
+        <div class="d-flex justify-content-between">
+          <div class="text-muted">Subtotal</div>
+          <div class="mono">{{ cur_symbol }} {{ money(q.subtotal) }}</div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+          <div class="text-muted">Discount</div>
+          <div class="mono">{{ cur_symbol }} {{ money(q.discount) }}</div>
+        </div>
+
+        <hr class="my-2">
+
+        <div class="d-flex justify-content-between">
+          <div class="text-muted">Taxable Value</div>
+          <div class="mono fw-semibold">
+            {{ cur_symbol }} {{ "{:,.2f}".format(taxable_dec) }}
+          </div>
+        </div>
+
+        {% if gst_enabled %}
+          <hr class="my-2">
+          <div class="fw-semibold mb-1">GST Breakdown</div>
+
+          {% if is_intrastate %}
+            <div class="small-muted mb-1">Intra-state Supply (CGST + SGST)</div>
+
+            <div class="d-flex justify-content-between">
+              <div class="text-muted">CGST (9%)</div>
+              <div class="mono">{{ cur_symbol }} {{ money(q.cgst) }}</div>
+            </div>
+
+            <div class="d-flex justify-content-between">
+              <div class="text-muted">SGST (9%)</div>
+              <div class="mono">{{ cur_symbol }} {{ money(q.sgst) }}</div>
+            </div>
+          {% else %}
+            <div class="small-muted mb-1">Inter-state Supply (IGST)</div>
+
+            <div class="d-flex justify-content-between">
+              <div class="text-muted">IGST (18%)</div>
+              <div class="mono">{{ cur_symbol }} {{ money(q.igst) }}</div>
+            </div>
+          {% endif %}
+
+          <hr class="my-2">
+
+          <div class="d-flex justify-content-between">
+            <div class="text-muted">Total GST</div>
+            <div class="mono fw-semibold">{{ cur_symbol }} {{ money(q.tax) }}</div>
+          </div>
+        {% endif %}
+
+        <div class="d-flex justify-content-between mt-2">
+          <div class="text-muted fs-5">Grand Total</div>
+          <div class="fw-bold mono fs-5">
+            {{ cur_symbol }} {{ money(q.total_amount or q.total) }}
+          </div>
+        </div>
+
+        <hr>
+
+        <!-- ESTIMATED CLOSURE -->
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="text-muted">Estimated Closure</div>
+          <div class="text-end">
+            {% if q.estimated_closure_date %}
+              <div class="{% if is_overdue %}text-danger fw-semibold{% endif %}">
+                {{ q.estimated_closure_date.strftime('%d %b %Y') }}
+              </div>
+              {% if is_overdue %}
+                <span class="badge text-bg-danger mt-1">Overdue</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if q.client_id %}
+          <hr>
+          <div class="alert alert-success py-2 mb-0">
+            <i class="bi bi-check-circle me-1"></i>
+            Linked to Client ID: <b>#{{ q.client_id }}</b>
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# Include modal only when it can be used #}
+{% if q.status and q.status.name in ("Approved","Sent") and not q.client_id %}
+  {% include "quotes/_convert_to_client_modal.html" %}
+{% endif %}
+
+{% endblock %}

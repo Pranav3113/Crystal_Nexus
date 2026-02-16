@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Import Leads • Crystal Nexus{% endblock %}
+{% block header %}Leads{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Import Leads (Excel)</h4>
+    <div class="text-muted">
+      Upload an Excel file and bulk-create leads. Industries and Services will auto-create if missing.
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('leads.list_leads') }}" class="btn btn-light">
+      <i class="bi bi-arrow-left me-1"></i> Back
+    </a>
+  </div>
+</div>
+
+<div class="card shadow-soft">
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data" class="row g-3">
+
+      <div class="col-12 col-md-8">
+        <label class="form-label">Upload .xlsx / .xlsm</label>
+        <input type="file" name="file" class="form-control" accept=".xlsx,.xlsm" required>
+        <div class="text-muted small mt-1">
+          Tip: Keep the first row as headers exactly as shown below.
+        </div>
+      </div>
+
+      <div class="col-12 col-md-4 d-grid align-content-end">
+        <button class="btn btn-primary">
+          <i class="bi bi-upload me-1"></i> Import
+        </button>
+      </div>
+
+      <div class="col-12">
+        <div class="alert alert-info mb-0">
+          <div class="fw-semibold mb-1">Expected columns (header row)</div>
+          <div class="small">
+            <code>name</code> (required),
+            <code>company</code>, <code>email</code>,
+            <code>phone_country</code>, <code>phone</code>,
+            <code>location</code>, <code>industry</code>,
+            <code>service</code>,
+            <code>website</code>, <code>notes</code>,
+            <code>status</code>, <code>source</code>
+          </div>
+          <div class="small mt-2">
+            <span class="fw-semibold">Notes:</span>
+            Status/Source must match your master names (case-insensitive).
+            Industry and Service will be auto-created if not found.
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary"
+           href="{{ url_for('static', filename='samples/leads_import_sample.xlsx') }}">
+          <i class="bi bi-download me-1"></i> Download Sample Excel
+        </a>
+
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#importTips">
+          <i class="bi bi-info-circle me-1"></i> Tips
+        </button>
+      </div>
+
+      <div class="col-12">
+        <div class="collapse" id="importTips">
+          <div class="card border-0 bg-light">
+            <div class="card-body">
+              <ul class="mb-0 small">
+                <li><b>name</b> is mandatory; rows without name will be skipped.</li>
+                <li><b>phone_country</b> example: <code>+91</code>, <code>+1</code>. If blank, defaults to <code>+91</code>.</li>
+                <li><b>industry</b> can be free text; it will be added to Industry Master automatically if missing.</li>
+                <li><b>service</b> can be free text; it will be added to Lead Service Master automatically if missing.</li>
+                <li>All imported leads will be assigned to <b>you</b> as Owner (current user).</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+{% if errors %}
+  <div class="card shadow-soft mt-3">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between">
+        <h6 class="mb-0">Import Errors ({{ errors|length }})</h6>
+        <span class="text-muted small">Fix these rows and re-upload.</span>
+      </div>
+      <hr>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 140px;">Row</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in errors %}
+              {% set parts = e.split(':', 1) %}
+              <tr>
+                <td class="fw-semibold">{{ parts[0] }}</td>
+                <td class="text-danger">{{ parts[1] if parts|length > 1 else e }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}

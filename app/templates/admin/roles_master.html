@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Role Master{% endblock %}
+{% block header %}Role Master{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Create Role</div>
+        <form method="post" class="vstack gap-2">
+          <input type="hidden" name="action" value="create">
+          <div>
+            <label class="form-label">Role Name</label>
+            <input class="form-control" name="name" required placeholder="e.g., Sales Manager">
+          </div>
+          <div class="d-flex justify-content-end">
+            <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-soft mt-3">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Search</div>
+        <form method="get" class="d-flex gap-2">
+          <input class="form-control" name="q" placeholder="Role name..." value="{{ q }}">
+          <button class="btn btn-outline-dark"><i class="bi bi-search"></i></button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Roles</div>
+
+        {% if roles|length == 0 %}
+          <div class="text-muted">No roles found.</div>
+        {% else %}
+          <div class="accordion" id="roleAcc">
+            {% for r in roles %}
+              <div class="accordion-item rounded-4 overflow-hidden mb-2">
+                <h2 class="accordion-header" id="rh{{ r.id }}">
+                  <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#rc{{ r.id }}">
+                    <div class="w-100 d-flex justify-content-between align-items-center">
+                      <div class="fw-semibold">{{ r.name }}</div>
+                      <span class="badge text-bg-light text-dark">Perms: {{ r.permissions|length }}</span>
+                    </div>
+                  </button>
+                </h2>
+
+                <div id="rc{{ r.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" data-bs-parent="#roleAcc">
+                  <div class="accordion-body">
+
+                    <form method="post" class="row g-2 align-items-end mb-3">
+                      <input type="hidden" name="action" value="update">
+                      <input type="hidden" name="role_id" value="{{ r.id }}">
+                      <div class="col-12">
+                        <label class="form-label">Role Name</label>
+                        <input class="form-control" name="name" value="{{ r.name }}">
+                      </div>
+                      <div class="col-12 d-flex justify-content-end">
+                        <button class="btn btn-outline-dark btn-sm"><i class="bi bi-save2 me-1"></i>Update Role</button>
+                      </div>
+                    </form>
+
+                    <hr>
+
+                    <form method="post">
+                      <input type="hidden" name="action" value="set_permissions">
+                      <input type="hidden" name="role_id" value="{{ r.id }}">
+
+                      <div class="fw-semibold mb-2">Assign Permissions</div>
+
+                      <div class="row g-2">
+                        {% for p in perms %}
+                          <div class="col-12 col-md-6">
+                            <div class="form-check">
+                              <input class="form-check-input" type="checkbox" name="perm_id" value="{{ p.id }}"
+                                id="p{{ r.id }}_{{ p.id }}"
+                                {% if p in r.permissions %}checked{% endif %}>
+                              <label class="form-check-label" for="p{{ r.id }}_{{ p.id }}">
+                                <span class="fw-semibold">{{ p.code }}</span>
+                                {% if p.description %}
+                                  <div class="text-muted small">{{ p.description }}</div>
+                                {% endif %}
+                              </label>
+                            </div>
+                          </div>
+                        {% endfor %}
+                      </div>
+
+                      <div class="d-flex justify-content-end mt-3">
+                        <button class="btn btn-outline-primary">
+                          <i class="bi bi-shield-check me-1"></i>Save Permissions
+                        </button>
+                      </div>
+                    </form>
+
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

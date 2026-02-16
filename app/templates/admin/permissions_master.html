@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Permission Master{% endblock %}
+{% block header %}Permission Master{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Create Permission</div>
+        <form method="post" class="vstack gap-2">
+          <input type="hidden" name="action" value="create">
+
+          <div>
+            <label class="form-label">Code</label>
+            <input class="form-control" name="code" required placeholder="e.g., roles.manage">
+            <div class="text-muted small mt-1">Tip: use module.action format.</div>
+          </div>
+
+          <div>
+            <label class="form-label">Description</label>
+            <input class="form-control" name="description" placeholder="Optional">
+          </div>
+
+          <div class="d-flex justify-content-end">
+            <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-soft mt-3">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Search</div>
+        <form method="get" class="d-flex gap-2">
+          <input class="form-control" name="q" placeholder="code/description..." value="{{ q }}">
+          <button class="btn btn-outline-dark"><i class="bi bi-search"></i></button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Permissions</div>
+
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Code</th>
+                <th>Description</th>
+                <th style="width:220px;">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in perms %}
+              <tr>
+                <td class="fw-semibold">{{ p.code }}</td>
+                <td class="text-muted">{{ p.description or "—" }}</td>
+                <td>
+                  <form method="post" class="d-flex gap-2">
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" name="permission_id" value="{{ p.id }}">
+                    <input class="form-control form-control-sm" name="description" value="{{ p.description or '' }}" placeholder="Description">
+                    <button class="btn btn-sm btn-outline-dark">Save</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+              {% if perms|length == 0 %}
+              <tr><td colspan="3" class="text-center text-muted p-5">No permissions found</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="text-muted small mt-2">
+          Note: Permission <b>code</b> is treated as immutable once used in routes/templates.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

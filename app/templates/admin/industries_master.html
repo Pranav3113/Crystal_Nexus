@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Industry Master • Crystal Nexus{% endblock %}
+{% block header %}Industry Master{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Industry Master</h4>
+    <div class="text-muted">Manage industries used in Leads.</div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <h6 class="mb-3">Add New Industry</h6>
+
+        <form method="post" class="vstack gap-2">
+          <input type="hidden" name="action" value="create">
+
+          <div>
+            <label class="form-label">Industry Name</label>
+            <input class="form-control" name="name" placeholder="e.g., IT Services" required>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Sort Order</label>
+              <input class="form-control" name="sort_order" type="number" value="0">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Active</label>
+              <select class="form-select" name="is_active">
+                <option value="1" selected>Yes</option>
+                <option value="0">No</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> Add Industry
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-soft">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Industry</th>
+              <th>Sort</th>
+              <th>Active</th>
+              <th class="text-end">Update</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in items %}
+            <tr>
+              <td class="fw-semibold">{{ it.name }}</td>
+              <td>{{ it.sort_order }}</td>
+              <td>
+                {% if it.is_active %}
+                  <span class="badge text-bg-success">Yes</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">No</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#editIndustry{{it.id}}">
+                  <i class="bi bi-pencil-square me-1"></i>Edit
+                </button>
+              </td>
+            </tr>
+
+            <!-- Modal -->
+            <div class="modal fade" id="editIndustry{{it.id}}" tabindex="-1">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <form method="post" action="{{ url_for('industries.industries_master') }}">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Edit Industry</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                      <input type="hidden" name="action" value="update">
+                      <input type="hidden" name="id" value="{{ it.id }}">
+
+                      <div class="mb-2">
+                        <label class="form-label">Name</label>
+                        <input class="form-control" name="name" value="{{ it.name }}" required>
+                      </div>
+
+                      <div class="row g-2">
+                        <div class="col-6">
+                          <label class="form-label">Sort Order</label>
+                          <input class="form-control" type="number" name="sort_order" value="{{ it.sort_order or 0 }}">
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label">Active</label>
+                          <select class="form-select" name="is_active">
+                            <option value="1" {% if it.is_active %}selected{% endif %}>Yes</option>
+                            <option value="0" {% if not it.is_active %}selected{% endif %}>No</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <hr>
+                      <div class="d-flex justify-content-end">
+                        <button class="btn btn-sm btn-outline-danger"
+                                name="action" value="delete"
+                                onclick="return confirm('Delete this industry? If used in leads, deletion will be blocked.')">
+                          <i class="bi bi-trash me-1"></i>Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="modal-footer">
+                      <button class="btn btn-light" data-bs-dismiss="modal" type="button">Cancel</button>
+                      <button class="btn btn-primary" type="submit">Save</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+
+            {% if items|length == 0 %}
+            <tr><td colspan="4" class="text-center text-muted p-4">No industries configured.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

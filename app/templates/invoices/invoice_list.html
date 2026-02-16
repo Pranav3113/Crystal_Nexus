@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block header %}Invoices{% endblock %}
+{% block content %}
+
+<style>
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+</style>
+
+<div class="card card-soft p-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">All Invoices</h5>
+    <div class="text-muted">Total: {{ items|length }}</div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Invoice No</th>
+          <th>Date</th>
+          <th>Client</th>
+          <th class="text-end">Total</th>
+          <th>Status</th>
+          <th style="width:180px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if items|length == 0 %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              No Invoices found.
+            </td>
+          </tr>
+        {% else %}
+          {% for inv in items %}
+          <tr>
+            <td><strong>{{ inv.invoice_no }}</strong></td>
+            <td>{{ inv.invoice_date }}</td>
+            <td>{{ inv.client.company_name if inv.client else "-" }}</td>
+            <td class="text-end">₹ {{ "%.2f"|format(inv.total_amount|float) }}</td>
+            <td>
+              {% if inv.status == "Unpaid" %}
+                <span class="badge bg-warning text-dark">Unpaid</span>
+              {% elif inv.status == "Partially Paid" %}
+                <span class="badge bg-info text-dark">Partially Paid</span>
+              {% elif inv.status == "Paid" %}
+                <span class="badge bg-success">Paid</span>
+              {% elif inv.status == "Cancelled" %}
+                <span class="badge bg-danger">Cancelled</span>
+              {% else %}
+                <span class="badge bg-secondary">{{ inv.status }}</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('invoices.view_invoice', invoice_id=inv.id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                View
+              </a>
+              <a href="{{ url_for('invoices.download_invoice', invoice_id=inv.id) }}"
+                 class="btn btn-sm btn-outline-secondary">
+                PDF
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

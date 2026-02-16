@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Activity Type Master • Crystal Nexus{% endblock %}
+{% block header %}Activity Type Master{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <h6 class="mb-3">Add Activity Type</h6>
+        <form method="post" class="vstack gap-2">
+          <div>
+            <label class="form-label">Name</label>
+            <input class="form-control" name="name" placeholder="e.g., Demo" required>
+          </div>
+          <div>
+            <label class="form-label">Bootstrap Icon (name)</label>
+            <input class="form-control" name="icon" placeholder="e.g., calendar-event" value="telephone">
+            <div class="form-text">Use Bootstrap icons name without “bi-”.</div>
+          </div>
+          <div>
+            <label class="form-label">Sort Order</label>
+            <input class="form-control" type="number" name="sort_order" value="0">
+          </div>
+          <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-soft">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Type</th>
+              <th>Icon</th>
+              <th>Sort</th>
+              <th>Active</th>
+              <th class="text-end">Edit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in types %}
+            <tr>
+              <td class="fw-semibold">{{ t.name }}</td>
+              <td><i class="bi bi-{{t.icon}}"></i> <span class="text-muted small ms-1">{{ t.icon }}</span></td>
+              <td>{{ t.sort_order }}</td>
+              <td>
+                {% if t.is_active %}<span class="badge text-bg-success">Yes</span>
+                {% else %}<span class="badge text-bg-secondary">No</span>{% endif %}
+              </td>
+              <td class="text-end">
+                <button class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#editType{{t.id}}">
+                  <i class="bi bi-pencil-square me-1"></i>Edit
+                </button>
+              </td>
+            </tr>
+
+            <div class="modal fade" id="editType{{t.id}}" tabindex="-1">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <form method="post" action="{{ url_for('admin.update_activity_type', type_id=t.id) }}">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Edit Activity Type</h5>
+                      <button class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                      <div class="mb-2">
+                        <label class="form-label">Name</label>
+                        <input class="form-control" name="name" value="{{ t.name }}" required>
+                      </div>
+                      <div class="mb-2">
+                        <label class="form-label">Icon</label>
+                        <input class="form-control" name="icon" value="{{ t.icon }}">
+                      </div>
+                      <div class="row g-2">
+                        <div class="col-6">
+                          <label class="form-label">Sort</label>
+                          <input class="form-control" type="number" name="sort_order" value="{{ t.sort_order }}">
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label">Active</label>
+                          <select class="form-select" name="is_active">
+                            <option value="1" {% if t.is_active %}selected{% endif %}>Yes</option>
+                            <option value="0" {% if not t.is_active %}selected{% endif %}>No</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button class="btn btn-light" type="button" data-bs-dismiss="modal">Cancel</button>
+                      <button class="btn btn-primary" type="submit">Save</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+
+            {% if types|length == 0 %}
+            <tr><td colspan="5" class="text-center text-muted p-4">No activity types configured.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}New Quote{% endblock %}
+{% block header %}Quotes{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">Create Quote</h4>
+    <div class="text-muted small">
+      Opportunity:
+      <b>{{ opp.opp_code }}</b> • {{ opp.title }}
+      {% if opp.company %}
+        • {{ opp.company }}
+      {% endif %}
+    </div>
+  </div>
+
+  <a href="{{ url_for('pipeline.board') }}" class="btn btn-light">
+    <i class="bi bi-arrow-left me-1"></i> Back
+  </a>
+</div>
+
+<div class="card shadow-soft border-0">
+  <div class="card-body">
+
+    <!-- Opportunity Summary -->
+    <div class="p-3 mb-4 rounded-4 bg-light border">
+      <div class="row small">
+        <div class="col-md-4">
+          <div class="text-muted">Opportunity Code</div>
+          <div class="fw-semibold">{{ opp.opp_code }}</div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted">Owner</div>
+          <div class="fw-semibold">
+            {{ opp.owner.name if opp.owner else '—' }}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="text-muted">Expected Close</div>
+          <div class="fw-semibold">
+            {{ opp.expected_close_date.strftime('%d %b %Y') if opp.expected_close_date else '—' }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORM -->
+    <form method="post" class="row g-4">
+
+      <!-- Currency (DB driven) -->
+      <div class="col-12 col-md-4">
+        <label class="form-label fw-semibold">Currency</label>
+        <select class="form-select" name="currency" id="currencySelect">
+          {% for c in currencies %}
+            <option value="{{ c.code }}"
+              {% if (c.code|upper) == 'INR' %}selected{% endif %}>
+              {{ c.code }}{% if c.symbol %} ({{ c.symbol }}){% endif %} — {{ c.name }}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Quote currency for calculations and proposal.</div>
+      </div>
+
+      <!-- Estimated Closure -->
+      <div class="col-12 col-md-4">
+        <label class="form-label fw-semibold">Estimated Closure Date</label>
+        <input
+          type="date"
+          class="form-control"
+          name="estimated_closure_date"
+          min="{{ today.strftime('%Y-%m-%d') }}"
+          value="{{ default_estimated_closure_date.strftime('%Y-%m-%d') if default_estimated_closure_date else '' }}"
+        >
+        <div class="form-text">
+          Forecasted closing date (can differ from opportunity expected date).
+        </div>
+      </div>
+
+      <!-- Spacer -->
+      <div class="col-12 col-md-4"></div>
+
+      <!-- Customer Notes -->
+      <div class="col-12">
+        <label class="form-label fw-semibold">Customer Notes</label>
+        <textarea
+          class="form-control"
+          name="customer_notes"
+          rows="3"
+          placeholder="Scope, deliverables, milestones, payment structure..."></textarea>
+        <div class="form-text">Visible in proposal PDF.</div>
+      </div>
+
+      <!-- Internal Notes -->
+      <div class="col-12">
+        <label class="form-label fw-semibold">Internal Notes</label>
+        <textarea
+          class="form-control"
+          name="notes"
+          rows="2"
+          placeholder="Margin notes, approval justification, risk flags..."></textarea>
+        <div class="form-text">Visible only internally.</div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="col-12 d-flex justify-content-end gap-2 mt-3">
+        <a href="{{ url_for('quotes.list_quotes') }}" class="btn btn-light">
+          Cancel
+        </a>
+        <button class="btn btn-primary">
+          <i class="bi bi-check2-circle me-1"></i>
+          Create Draft Quote
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+</div>
+
+{% endblock %}

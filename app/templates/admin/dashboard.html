@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Dashboard • Crystal Nexus{% endblock %}
+{% block header %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <h4 class="mb-1">Welcome 👋</h4>
+        <div class="text-muted">Your Lead Management system is live locally. Next we’ll add Activities, Pipeline and Approvals.</div>
+        <hr>
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-primary" href="{{ url_for('leads.create_lead') }}"><i class="bi bi-plus-lg me-1"></i>New Lead</a>
+          <a class="btn btn-outline-dark" href="{{ url_for('leads.list_leads') }}"><i class="bi bi-people me-1"></i>View Leads</a>
+          <a class="btn btn-light" href="{{ url_for('admin.lead_status_master') }}"><i class="bi bi-tags me-1"></i>Status Master</a>
+          <a class="btn btn-light" href="{{ url_for('admin.lead_source_master') }}"><i class="bi bi-diagram-3 me-1"></i>Source Master</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Quick Tips</div>
+        <ul class="small text-muted mb-0">
+          <li>Configure Status/Source masters as per industry.</li>
+          <li>Keep fields minimal for faster adoption.</li>
+          <li>We’ll add activities & follow-ups next.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

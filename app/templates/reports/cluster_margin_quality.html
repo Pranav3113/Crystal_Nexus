@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Margin Quality{% endblock %}
+{% block header %}Margin Quality{% endblock %}
+
+{% block content %}
+<style>
+  .kpi { font-size: 1.25rem; font-weight: 800; }
+  .muted { color:#6c757d; }
+  .badge-soft { padding:.4rem .6rem; border-radius:999px; font-weight:700; }
+  .b-green { background: rgba(25,135,84,.15); color:#146c43; }
+  .b-amber { background: rgba(245,124,0,.15); color:#c25f00; }
+  .b-red { background: rgba(220,53,69,.15); color:#b02a37; }
+  .row-flag { background: rgba(220,53,69,.06); }
+</style>
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-12 col-md-3">
+      <label class="form-label mb-1">Month</label>
+      <input type="month" class="form-control" name="month" value="{{ month_value }}">
+    </div>
+
+    <div class="col-12 col-md-4">
+      <label class="form-label mb-1">Client</label>
+      <select class="form-select" name="client_id">
+        <option value="">All Clients</option>
+        {% for c in clients %}
+          <option value="{{ c.id }}" {% if client_id == c.id|string %}selected{% endif %}>
+            {{ c.company_name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-12 col-md-3">
+      <label class="form-label mb-1">Responsible (AM)</label>
+      <select class="form-select" name="responsible">
+        <option value="">All</option>
+        {% for u in users %}
+          <option value="{{ u.id }}" {% if responsible == u.id|string %}selected{% endif %}>
+            {{ u.name }}
+          </option>
+        {% endfor %}
+      </select>
+      <div class="text-muted small mt-1">Filters by Project AM (if set).</div>
+    </div>
+
+    <div class="col-6 col-md-1">
+      <label class="form-label mb-1">Flag</label>
+      <select class="form-select" name="flag_only">
+        <option value="">All</option>
+        <option value="1" {% if flag_only == "1" %}selected{% endif %}>Only flagged</option>
+      </select>
+    </div>
+
+    <div class="col-6 col-md-1 d-grid">
+      <label class="form-label mb-1">&nbsp;</label>
+      <button class="btn btn-outline-dark"><i class="bi bi-funnel"></i></button>
+    </div>
+  </form>
+
+  <div class="text-muted small">
+    Period: <span class="fw-semibold">{{ start_date }}</span> to <span class="fw-semibold">{{ end_date }}</span>
+    • Threshold: <span class="fw-semibold">{{ "%.2f"|format(threshold or 0) }}%</span>
+    • <a href="/admin/margin-settings" class="text-decoration-none">Change</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-md-3">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="muted small">Total Contract Value</div>
+        <div class="kpi">{{ "%.2f"|format(total_contract or 0) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-3">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="muted small">Total Cost</div>
+        <div class="kpi">{{ "%.2f"|format(total_cost or 0) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-3">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="muted small">Overall Margin %</div>
+        <div class="kpi">{{ "%.2f"|format(overall_margin_pct or 0) }}%</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-3">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="muted small">Flagged Projects</div>
+        <div class="kpi">{{ flagged_count }}</div>
+        <div class="text-muted small">Margin below threshold</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-soft">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="fw-semibold">Projects</div>
+      <div class="text-muted small">Costs assumed in same currency as Project.</div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Project</th>
+            <th>Client</th>
+            <th>Responsible</th>
+            <th class="text-end">Contract</th>
+            <th class="text-end">Cost</th>
+            <th class="text-end">Margin %</th>
+            <th class="text-end">Margin Amt</th>
+            <th>Flag</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            {% set p = r.project %}
+            <tr class="{% if r.is_flag %}row-flag{% endif %}">
+              <td>
+                <a class="fw-semibold text-decoration-none"
+                   href="{{ url_for('projects.view_project', project_id=p.id) }}">
+                  {{ p.project_code }}
+                </a>
+                <div class="text-muted small">{{ p.name }}</div>
+                <div class="text-muted small">
+                  Quote:
+                  <a href="{{ url_for('quotes.view_quote', quote_id=p.quote_id) }}" class="text-decoration-none">
+                    {{ p.quote.quote_code if p.quote else '' }}
+                  </a>
+                </div>
+              </td>
+
+              <td>{{ p.client.company_name if p.client else "—" }}</td>
+              <td>{{ r.responsible }}</td>
+
+              <td class="text-end">{{ "%.2f"|format(r.contract_value or 0) }}</td>
+              <td class="text-end">{{ "%.2f"|format(r.total_cost or 0) }}</td>
+
+              <td class="text-end">
+                {% if r.is_flag %}
+                  <span class="badge-soft b-red">{{ "%.2f"|format(r.margin_percent or 0) }}%</span>
+                {% else %}
+                  <span class="badge-soft b-green">{{ "%.2f"|format(r.margin_percent or 0) }}%</span>
+                {% endif %}
+              </td>
+
+              <td class="text-end">{{ "%.2f"|format(r.margin_amount or 0) }}</td>
+
+              <td>
+                {% if r.is_flag %}
+                  <span class="badge-soft b-red">Flagged</span>
+                {% else %}
+                  <span class="badge-soft b-green">OK</span>
+                {% endif %}
+              </td>
+
+              <td class="text-muted small">
+                {{ p.margin_reason or "—" }}
+              </td>
+            </tr>
+          {% endfor %}
+
+          {% if rows|length == 0 %}
+            <tr><td colspan="9" class="text-center text-muted p-5">No projects found for selected filters</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

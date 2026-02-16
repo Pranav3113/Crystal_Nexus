@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+{% block title %}Client{% endblock %}
+{% block header %}Client{% endblock %}
+
+{% block content %}
+<style>
+  .chip { padding: .25rem .55rem; border-radius: 999px; font-size: .75rem; background: #f1f5f9; border: 1px solid rgba(0,0,0,.06); }
+  .chip-warn { background: rgba(245,124,0,.14); color:#c25f00; border-color: rgba(245,124,0,.25); }
+  .chip-ok { background: rgba(25,135,84,.14); color:#146c43; border-color: rgba(25,135,84,.25); }
+
+  .section-title { font-weight: 600; }
+  .mini-card { background:#f8fafc; border:1px solid rgba(0,0,0,.06); border-radius: 1rem; }
+  .doc-table td, .doc-table th { vertical-align: middle; }
+</style>
+
+{% set client_type = (client.client_type or '') %}
+{% set is_domestic = (client_type|lower == 'domestic') %}
+
+<!-- TOP HEADER SUMMARY -->
+<div class="card shadow-soft mb-3">
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+      <div>
+        <div class="fs-5 fw-semibold">
+          <i class="bi bi-building me-2"></i>{{ client.company_name }}
+        </div>
+        <div class="text-muted small">
+          {{ (client.industry.name if client.industry else (client.company_industry or "—")) }}
+          {% if client.service %} • {{ client.service }}{% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <span class="chip"><i class="bi bi-globe2 me-1"></i>{{ client.client_type or "Type: —" }}</span>
+          <span class="chip"><i class="bi bi-tag me-1"></i>{{ client.client_category or "Category: —" }}</span>
+          {% if client.pan %}
+            <span class="chip"><i class="bi bi-card-text me-1"></i>{{ client.pan }}</span>
+          {% endif %}
+          {% if client.website %}
+            <span class="chip"><i class="bi bi-link-45deg me-1"></i>{{ client.website }}</span>
+          {% endif %}
+        </div>
+
+        {% if is_domestic %}
+          <div class="text-muted small mt-2">
+            <i class="bi bi-receipt me-1"></i>
+            GST on quotes depends on <b>Company Branch state</b> vs <b>Client Branch state</b>.
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="text-end">
+        {% if client.is_active %}
+          <span class="badge text-bg-success">Active</span>
+        {% else %}
+          <span class="badge text-bg-secondary">Inactive</span>
+        {% endif %}
+        <div class="mt-2">
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('clients.list_clients') }}">
+            <i class="bi bi-arrow-left me-1"></i>Back
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- LEFT -->
+  <div class="col-12 col-lg-5">
+
+    <!-- UPDATE CLIENT -->
+    <div class="card shadow-soft mb-3">
+      <div class="card-body">
+        <div class="section-title mb-2">
+          <i class="bi bi-pencil-square me-2"></i>Client Details
+        </div>
+
+        <form method="post" class="vstack gap-2">
+          <input type="hidden" name="action" value="update_client">
+
+          <div>
+            <label class="form-label">Company Name</label>
+            <input class="form-control" name="company_name" value="{{ client.company_name }}">
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Industry</label>
+              <select class="form-select" name="industry_id">
+                <option value="">—</option>
+                {% for ind in industries %}
+                  <option value="{{ ind.id }}" {% if client.industry_id == ind.id %}selected{% endif %}>
+                    {{ ind.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Same master as Leads.</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Service</label>
+              <input class="form-control" name="service" value="{{ client.service or '' }}">
+            </div>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Domestic/International</label>
+              <select class="form-select" name="client_type">
+                <option value="">—</option>
+                <option value="Domestic" {% if client.client_type=='Domestic' %}selected{% endif %}>Domestic</option>
+                <option value="International" {% if client.client_type=='International' %}selected{% endif %}>International</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Category</label>
+              <select class="form-select" name="client_category">
+                <option value="">—</option>
+                <option value="Individual" {% if client.client_category=='Individual' %}selected{% endif %}>Individual</option>
+                <option value="Corporate" {% if client.client_category=='Corporate' %}selected{% endif %}>Corporate</option>
+                <option value="LSP" {% if client.client_category=='LSP' %}selected{% endif %}>LSP</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Website</label>
+              <input class="form-control" name="website" value="{{ client.website or '' }}">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Reference</label>
+              <input class="form-control" name="reference" value="{{ client.reference or '' }}">
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label">PAN</label>
+            <input class="form-control" name="pan" value="{{ client.pan or '' }}">
+          </div>
+
+          <div>
+            <label class="form-label">Remarks</label>
+            <textarea class="form-control" name="remarks" rows="2">{{ client.remarks or '' }}</textarea>
+          </div>
+
+          <div class="row g-2 align-items-end">
+            <div class="col-6">
+              <label class="form-label">Active</label>
+              <select class="form-select" name="is_active">
+                <option value="1" {% if client.is_active %}selected{% endif %}>Active</option>
+                <option value="0" {% if not client.is_active %}selected{% endif %}>Inactive</option>
+              </select>
+            </div>
+            <div class="col-6 d-grid">
+              <button class="btn btn-primary">
+                <i class="bi bi-save2 me-1"></i>Save Changes
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- CLIENT DOCUMENTS -->
+    <div class="card shadow-soft mb-3">
+      <div class="card-body">
+        <div class="section-title mb-2">
+          <i class="bi bi-folder2-open me-2"></i>Client Documents
+          <span class="text-muted small">(Overall or Quote-wise)</span>
+        </div>
+
+        <!-- Upload form -->
+        <form method="post" enctype="multipart/form-data" class="vstack gap-2">
+          <input type="hidden" name="action" value="upload_document">
+
+          <div>
+            <label class="form-label">Document Name <span class="text-danger">*</span></label>
+            <input class="form-control" name="document_name" required placeholder="e.g., NDA / Agreement / MSA">
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Start Date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="start_date" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Expiry Date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="expiry_date" required>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label">Attach to Quote (optional)</label>
+            <select class="form-select" name="quote_id">
+              <option value="">Overall (NDA / Agreement etc.)</option>
+              {% for q in quotes %}
+                <option value="{{ q.id }}">
+                  {{ q.quote_code }} • V{{ q.version }}
+                  {% if q.status %} • {{ q.status.name }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Leave blank for general documents.</div>
+          </div>
+
+          <div>
+            <label class="form-label">Upload File <span class="text-danger">*</span></label>
+            <input type="file" class="form-control" name="document_file" required>
+            <div class="form-text">Allowed: PDF, Images, DOC/DOCX, XLSX</div>
+          </div>
+
+          <div class="d-flex justify-content-end pt-1">
+            <button class="btn btn-primary">
+              <i class="bi bi-upload me-1"></i>Upload Document
+            </button>
+          </div>
+        </form>
+
+        <hr class="my-3">
+
+        <!-- Documents list -->
+        {% if documents|length == 0 %}
+          <div class="text-muted">No documents uploaded yet.</div>
+        {% else %}
+          <div class="table-responsive">
+            <table class="table table-sm doc-table">
+              <thead>
+                <tr>
+                  <th>Document</th>
+                  <th>Type</th>
+                  <th>Start</th>
+                  <th>Expiry</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in documents %}
+                  <tr>
+                    <td>
+                      <div class="fw-semibold">{{ d.document_name }}</div>
+                      <div class="text-muted small">{{ d.file_name }}</div>
+                      {% if d.uploaded_at %}
+                        <div class="text-muted small">Uploaded: {{ d.uploaded_at.strftime("%d-%b-%Y") }}</div>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if d.quote_id %}
+                        <span class="badge text-bg-info">Quote</span>
+                        <div class="small text-muted mt-1">#{{ d.quote_id }}</div>
+                      {% else %}
+                        <span class="badge text-bg-secondary">Overall</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ d.start_date.strftime("%d-%b-%Y") if d.start_date else "—" }}</td>
+                    <td>{{ d.expiry_date.strftime("%d-%b-%Y") if d.expiry_date else "—" }}</td>
+                    <td class="text-end">
+                      <a class="btn btn-sm btn-outline-dark"
+                         href="{{ url_for('clients.download_client_document', doc_id=d.id) }}">
+                        <i class="bi bi-download me-1"></i>Download
+                      </a>
+
+                      <form method="post"
+                            action="{{ url_for('clients.delete_client_document', doc_id=d.id) }}"
+                            class="d-inline"
+                            onsubmit="return confirm('Delete this document?');">
+                        <button class="btn btn-sm btn-outline-danger">
+                          <i class="bi bi-trash me-1"></i>Delete
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ADD BRANCH -->
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="section-title mb-2">
+          <i class="bi bi-geo-alt me-2"></i>Add Branch <span class="text-muted small">(requires 1 contact)</span>
+        </div>
+
+        <form method="post" class="vstack gap-2">
+          <input type="hidden" name="action" value="add_branch">
+
+          <div>
+            <label class="form-label">Branch Location</label>
+            <input class="form-control" name="branch_location" required placeholder="e.g., Mumbai HO">
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">City</label>
+              <input class="form-control" name="city">
+            </div>
+            <div class="col-6">
+              <label class="form-label">State</label>
+              <input class="form-control" name="state">
+            </div>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Country</label>
+              <input class="form-control" name="country">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Pin Code</label>
+              <input class="form-control" name="pin_code">
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label">Address</label>
+            <textarea class="form-control" name="address" rows="2"></textarea>
+          </div>
+
+          <div>
+            <label class="form-label">GST</label>
+            <input class="form-control" name="gst" placeholder="GSTIN">
+            {% if is_domestic %}
+              <div class="form-text">
+                Domestic clients should have GSTIN on the relevant branch for GST invoices/PI.
+              </div>
+            {% endif %}
+          </div>
+
+          <hr class="my-2">
+
+          <div class="fw-semibold">Primary Contact</div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Name</label>
+              <input class="form-control" name="contact_name" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Designation</label>
+              <input class="form-control" name="contact_designation">
+            </div>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Phone</label>
+              <input class="form-control" name="contact_phone">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Email</label>
+              <input class="form-control" name="contact_email">
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end pt-1">
+            <button class="btn btn-primary">
+              <i class="bi bi-plus-lg me-1"></i>Add Branch
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT -->
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="section-title mb-2">
+          <i class="bi bi-diagram-3 me-2"></i>Branches & Contacts
+        </div>
+
+        {% if branches|length == 0 %}
+          <div class="text-muted">No branches yet.</div>
+        {% else %}
+          <div class="accordion" id="branchAcc">
+            {% for b in branches %}
+
+              {% set contacts = contacts_by_branch.get(b.id, []) %}
+              {% set has_gst = (b.gst or '')|length > 0 %}
+              {% set gst_badge = 'chip-ok' if has_gst else 'chip-warn' %}
+
+              <div class="accordion-item rounded-4 overflow-hidden mb-2">
+                <h2 class="accordion-header">
+                  <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button"
+                          data-bs-toggle="collapse" data-bs-target="#bc{{ b.id }}">
+                    <div class="w-100 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                      <div class="fw-semibold">
+                        <i class="bi bi-geo-alt me-1"></i>{{ b.branch_location }}
+                        <span class="text-muted small">
+                          {% if b.city %} • {{ b.city }}{% endif %}{% if b.state %}, {{ b.state }}{% endif %}
+                        </span>
+                      </div>
+                      <div class="d-flex align-items-center gap-2 flex-wrap">
+                        {% if is_domestic %}
+                          {% if has_gst %}
+                            <span class="chip {{ gst_badge }}">GST: {{ b.gst }}</span>
+                          {% else %}
+                            <span class="chip {{ gst_badge }}"><i class="bi bi-exclamation-triangle me-1"></i>No GST</span>
+                          {% endif %}
+                        {% endif %}
+
+                        {% if b.is_active %}
+                          <span class="badge text-bg-success">Active</span>
+                        {% else %}
+                          <span class="badge text-bg-secondary">Inactive</span>
+                        {% endif %}
+                        <span class="badge text-bg-light text-dark">Contacts: {{ contacts|length }}</span>
+                      </div>
+                    </div>
+                  </button>
+                </h2>
+
+                <div id="bc{{ b.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" data-bs-parent="#branchAcc">
+                  <div class="accordion-body">
+
+                    <!-- UPDATE BRANCH -->
+                    <div class="mini-card p-3 mb-3">
+                      <div class="fw-semibold mb-2"><i class="bi bi-pencil-square me-1"></i>Edit Branch</div>
+
+                      <form method="post" action="{{ url_for('clients.update_branch', branch_id=b.id) }}" class="row g-2">
+                        <div class="col-12">
+                          <label class="form-label">Branch Location</label>
+                          <input class="form-control" name="branch_location" value="{{ b.branch_location }}">
+                        </div>
+                        <div class="col-12">
+                          <label class="form-label">Address</label>
+                          <textarea class="form-control" name="address" rows="2">{{ b.address or '' }}</textarea>
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label">City</label>
+                          <input class="form-control" name="city" value="{{ b.city or '' }}">
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label">State</label>
+                          <input class="form-control" name="state" value="{{ b.state or '' }}">
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label">Country</label>
+                          <input class="form-control" name="country" value="{{ b.country or '' }}">
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label">Pin Code</label>
+                          <input class="form-control" name="pin_code" value="{{ b.pin_code or '' }}">
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label">GST</label>
+                          <input class="form-control" name="gst" value="{{ b.gst or '' }}">
+                        </div>
+                        <div class="col-6">
+                          <label class="form-label">Active</label>
+                          <select class="form-select" name="is_active">
+                            <option value="1" {% if b.is_active %}selected{% endif %}>Active</option>
+                            <option value="0" {% if not b.is_active %}selected{% endif %}>Inactive</option>
+                          </select>
+                        </div>
+                        <div class="col-12 d-flex justify-content-end">
+                          <button class="btn btn-sm btn-outline-dark">
+                            <i class="bi bi-save2 me-1"></i>Save Branch
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+
+                    <!-- CONTACTS -->
+                    <div class="fw-semibold mb-2">
+                      <i class="bi bi-person-lines-fill me-1"></i>Contacts
+                      <span class="text-muted small">(at least 1 required)</span>
+                    </div>
+
+                    {% for ct in contacts %}
+                      <div class="card mini-card p-3 mb-2">
+                        <form method="post" action="{{ url_for('clients.update_contact', contact_id=ct.id) }}" class="row g-2 align-items-end">
+                          <div class="col-12 col-md-3">
+                            <label class="form-label">Name</label>
+                            <input class="form-control form-control-sm" name="name" value="{{ ct.name }}">
+                          </div>
+                          <div class="col-12 col-md-2">
+                            <label class="form-label">Phone</label>
+                            <input class="form-control form-control-sm" name="phone" value="{{ ct.phone or '' }}">
+                          </div>
+                          <div class="col-12 col-md-3">
+                            <label class="form-label">Email</label>
+                            <input class="form-control form-control-sm" name="email" value="{{ ct.email or '' }}">
+                          </div>
+                          <div class="col-12 col-md-2">
+                            <label class="form-label">Designation</label>
+                            <input class="form-control form-control-sm" name="designation" value="{{ ct.designation or '' }}">
+                          </div>
+                          <div class="col-6 col-md-1">
+                            <label class="form-label">Primary</label>
+                            <select class="form-select form-select-sm" name="is_primary">
+                              <option value="0" {% if not ct.is_primary %}selected{% endif %}>No</option>
+                              <option value="1" {% if ct.is_primary %}selected{% endif %}>Yes</option>
+                            </select>
+                          </div>
+                          <div class="col-6 col-md-1 d-grid">
+                            <button class="btn btn-sm btn-outline-dark">Save</button>
+                          </div>
+                        </form>
+
+                        <form method="post"
+                              action="{{ url_for('clients.delete_contact', contact_id=ct.id) }}"
+                              class="text-end mt-2"
+                              onsubmit="return confirm('Delete this contact? (Cannot delete last contact)');">
+                          <button class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash me-1"></i>Delete
+                          </button>
+                        </form>
+                      </div>
+                    {% endfor %}
+
+                    <!-- ADD CONTACT -->
+                    <div class="card mini-card p-3 mt-2">
+                      <div class="fw-semibold mb-2">
+                        <i class="bi bi-person-plus me-1"></i>Add Contact
+                      </div>
+                      <form method="post" action="{{ url_for('clients.add_contact', branch_id=b.id) }}" class="row g-2">
+                        <div class="col-12 col-md-3">
+                          <input class="form-control form-control-sm" name="name" placeholder="Name" required>
+                        </div>
+                        <div class="col-12 col-md-2">
+                          <input class="form-control form-control-sm" name="phone" placeholder="Phone">
+                        </div>
+                        <div class="col-12 col-md-3">
+                          <input class="form-control form-control-sm" name="email" placeholder="Email">
+                        </div>
+                        <div class="col-12 col-md-2">
+                          <input class="form-control form-control-sm" name="designation" placeholder="Designation">
+                        </div>
+                        <div class="col-6 col-md-1">
+                          <select class="form-select form-select-sm" name="is_primary">
+                            <option value="0" selected>No</option>
+                            <option value="1">Yes</option>
+                          </select>
+                        </div>
+                        <div class="col-6 col-md-1 d-grid">
+                          <button class="btn btn-sm btn-primary">Add</button>
+                        </div>
+                      </form>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

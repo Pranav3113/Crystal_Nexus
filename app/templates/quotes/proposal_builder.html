@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}Proposal • {{ q.quote_code }}{% endblock %}
+{% block header %}Proposal Builder{% endblock %}
+
+{% block content %}
+<style>
+  .shadow-soft { box-shadow: 0 6px 18px rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.06); border-radius: 14px; }
+  .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  .small-muted { color:#64748b; font-size:.85rem; }
+</style>
+
+{% set proposal_done = q.proposal_created_at is not none %}
+{% set status_name = q.status.name if q.status else "" %}
+{% set is_sent = (status_name == "Sent") %}
+{% set is_selected = (status_name == "Selected") %}
+{% set ro = (readonly if readonly is defined else false) %}
+{% set readonly_mode = ro or is_sent %}
+
+{% set taxable_value = (q.subtotal or 0) - (q.discount or 0) %}
+{% set is_intrastate = (q.cgst and q.cgst > 0) %}
+
+{% macro money(v) -%}
+  {%- if v is none -%}0.00
+  {%- else -%}
+    {%- set s = v|string -%}
+    {%- set s = s|replace(",", "") -%}
+    {%- if s == "" -%}0.00
+    {%- else -%}{{ "{:,.2f}".format(s|float) }}
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <div>
+    <h4 class="mb-0">Proposal for {{ q.quote_code }}</h4>
+    <div class="text-muted">
+      Status:
+      <span class="badge text-bg-secondary">{{ status_name if status_name else '-' }}</span>
+
+      {% if proposal_done %}
+        <span class="ms-2 badge text-bg-success">Proposal Created</span>
+      {% else %}
+        <span class="ms-2 badge text-bg-warning">Not Created</span>
+      {% endif %}
+
+      {% if readonly_mode %}
+        <span class="ms-2 badge text-bg-dark">
+          <i class="bi bi-lock me-1"></i>Locked
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap">
+    {% if proposal_done %}
+      <a class="btn btn-outline-dark"
+         href="{{ url_for('quotes.download_proposal', quote_id=q.id) }}">
+        <i class="bi bi-download me-1"></i>Download Proposal
+      </a>
+    {% endif %}
+
+    {% if is_selected and proposal_done and not readonly_mode %}
+      <form method="post"
+            action="{{ url_for('quotes.mark_sent', quote_id=q.id) }}"
+            class="d-inline">
+        <button class="btn btn-success"
+                type="submit"
+                onclick="return confirm('Mark this quote as Sent?');">
+          <i class="bi bi-envelope-check me-1"></i>Mark Sent
+        </button>
+      </form>
+    {% endif %}
+
+    <a class="btn btn-light"
+       href="{{ url_for('quotes.view_quote', quote_id=q.id) }}">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- LEFT: TERMS -->
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <h6 class="mb-2">Terms & Conditions</h6>
+
+        {% if readonly_mode %}
+          <div class="alert alert-warning py-2">
+            <i class="bi bi-lock me-1"></i>
+            Proposal is locked (Sent / readonly mode).
+          </div>
+        {% endif %}
+
+        <form method="post" class="vstack gap-2">
+
+          <textarea class="form-control"
+                    rows="12"
+                    name="proposal_terms"
+                    placeholder="Enter one point per line..."
+                    {% if readonly_mode %}disabled{% endif %}>{{ q.proposal_terms or '' }}</textarea>
+
+          {% if not readonly_mode %}
+            <button class="btn btn-primary" type="submit">
+              <i class="bi bi-file-earmark-check me-1"></i>
+              {% if proposal_done %}Update Proposal{% else %}Create Proposal{% endif %}
+            </button>
+          {% endif %}
+
+          <div class="small text-muted">
+            Tip: Write one term per line. After saving, download the PDF and mark as Sent.
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: SUMMARY -->
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <h6 class="mb-2">Financial Summary</h6>
+
+        <!-- Items -->
+        <div class="small text-muted mb-2">Items</div>
+        {% if items and items|length > 0 %}
+          <ul class="mb-3">
+            {% for it in items %}
+              <li class="mb-1">
+                <span class="fw-semibold">{{ it.item_name }}</span>
+                <span class="text-muted"> — Qty </span>{{ it.qty }}
+                <span class="text-muted"> × </span>{{ money(it.rate) }}
+                <span class="text-muted"> = </span>
+                <span class="mono">₹ {{ money(it.amount) }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-muted small mb-3">No items found.</div>
+        {% endif %}
+
+        <hr>
+
+        <!-- Subtotal -->
+        <div class="d-flex justify-content-between">
+          <div class="text-muted">Subtotal</div>
+          <div class="mono">₹ {{ money(q.subtotal) }}</div>
+        </div>
+
+        <!-- Discount -->
+        <div class="d-flex justify-content-between">
+          <div class="text-muted">Discount</div>
+          <div class="mono">₹ {{ money(q.discount) }}</div>
+        </div>
+
+        <hr>
+
+        <!-- Taxable -->
+        <div class="d-flex justify-content-between">
+          <div class="text-muted">Taxable Value</div>
+          <div class="fw-semibold mono">₹ {{ money(taxable_value) }}</div>
+        </div>
+
+        <hr>
+
+        <!-- GST Breakdown -->
+        <div class="fw-semibold mb-1">GST Breakdown</div>
+
+        {% if is_intrastate %}
+          <div class="small-muted mb-1">
+            Intra-state Supply (CGST + SGST)
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <div class="text-muted">CGST (9%)</div>
+            <div class="mono">₹ {{ money(q.cgst) }}</div>
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <div class="text-muted">SGST (9%)</div>
+            <div class="mono">₹ {{ money(q.sgst) }}</div>
+          </div>
+
+        {% else %}
+          <div class="small-muted mb-1">
+            Inter-state Supply (IGST)
+          </div>
+
+          <div class="d-flex justify-content-between">
+            <div class="text-muted">IGST (18%)</div>
+            <div class="mono">₹ {{ money(q.igst) }}</div>
+          </div>
+        {% endif %}
+
+        <hr>
+
+        <!-- Total GST -->
+        <div class="d-flex justify-content-between">
+          <div class="text-muted">Total GST</div>
+          <div class="fw-semibold mono">₹ {{ money(q.tax) }}</div>
+        </div>
+
+        <!-- Grand Total -->
+        <div class="d-flex justify-content-between mt-2">
+          <div class="text-muted fs-5">Grand Total</div>
+          <div class="fw-bold mono fs-5">
+            ₹ {{ money(q.total_amount or q.total) }}
+          </div>
+        </div>
+
+        {% if proposal_done %}
+          <hr>
+          <div class="small text-muted">
+            Proposal created on {{ q.proposal_created_at.strftime('%d %b %Y %H:%M') }}
+          </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Quote Versions • {{ opp.opp_code }}{% endblock %}
+{% block header %}Quotes{% endblock %}
+
+{% block content %}
+
+{% set latest_version = quotes[0].version if quotes|length > 0 else None %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <div class="text-muted small">
+      {{ opp.opp_code }} • {{ opp.company or '—' }}
+    </div>
+    <h4 class="mb-0">All Quote Versions</h4>
+    <div class="text-muted small">
+      {{ opp.title }}
+    </div>
+  </div>
+
+  <a class="btn btn-light" href="{{ url_for('quotes.list_quotes') }}">
+    <i class="bi bi-arrow-left me-1"></i> Back
+  </a>
+</div>
+
+<div class="card shadow-soft border-0">
+  <div class="card-body p-0">
+
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Quote</th>
+            <th>Status</th>
+            <th>Estimated Closure</th>
+            <th class="text-end">Subtotal</th>
+            <th class="text-end">GST</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">Updated</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for q in quotes %}
+          {% set is_latest = (q.version == latest_version) %}
+
+          <tr class="{% if is_latest %}table-success{% endif %}">
+            <!-- Quote -->
+            <td>
+              <div class="fw-semibold">
+                {{ q.quote_code }}
+                {% if is_latest %}
+                  <span class="badge text-bg-success ms-1">Latest</span>
+                {% endif %}
+              </div>
+              <div class="text-muted small">
+                Version {{ q.version }}
+                {% if q.created_by %}
+                  • by {{ q.created_by.name }}
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Status -->
+            <td>
+              {% if q.status %}
+                {% set s = q.status.name %}
+                {% if s == "Draft" %}
+                  <span class="badge text-bg-secondary">Draft</span>
+                {% elif s == "Pending Approval" %}
+                  <span class="badge text-bg-warning">Pending</span>
+                {% elif s == "Approved" %}
+                  <span class="badge text-bg-info">Approved</span>
+                {% elif s == "Selected" %}
+                  <span class="badge text-bg-primary">Selected</span>
+                {% elif s == "Sent" %}
+                  <span class="badge text-bg-dark">Sent</span>
+                {% elif s == "Rejected" %}
+                  <span class="badge text-bg-danger">Rejected</span>
+                {% else %}
+                  <span class="badge text-bg-light border">{{ s }}</span>
+                {% endif %}
+              {% else %}
+                <span class="badge text-bg-secondary">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Estimated Closure -->
+            <td>
+              {% if q.estimated_closure_date %}
+                {{ q.estimated_closure_date.strftime("%d %b %Y") }}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Subtotal -->
+            <td class="text-end">
+              {{ q.subtotal or 0 }}
+            </td>
+
+            <!-- GST -->
+            <td class="text-end">
+              {{ q.tax or 0 }}
+            </td>
+
+            <!-- Total -->
+            <td class="text-end fw-semibold">
+              {{ q.total_amount or q.total or 0 }}
+            </td>
+
+            <!-- Updated -->
+            <td class="text-end text-muted small">
+              {{ q.updated_at.strftime("%d %b %Y, %I:%M %p") if q.updated_at else "—" }}
+            </td>
+
+            <!-- Actions -->
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a class="btn btn-outline-dark"
+                   href="{{ url_for('quotes.view_quote', quote_id=q.id) }}"
+                   title="View">
+                  <i class="bi bi-eye"></i>
+                </a>
+
+                {% if q.status and q.status.name in ("Draft","Rejected") %}
+                <a class="btn btn-outline-primary"
+                   href="{{ url_for('quotes.edit_quote', quote_id=q.id) }}"
+                   title="Edit">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+                {% endif %}
+              </div>
+            </td>
+
+          </tr>
+          {% endfor %}
+
+          {% if quotes|length == 0 %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-5">
+              No quote versions found.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+
+      </table>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

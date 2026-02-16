@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.name }} • Lead{% endblock %}
+{% block header %}Lead Details{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div>
+    <div class="text-muted small">
+      {{ lead.lead_code }} • {{ lead.company or '—' }}
+      {% if lead.service %}
+        • <span class="badge text-bg-info">{{ lead.service.name }}</span>
+      {% endif %}
+    </div>
+    <h4 class="mb-0">{{ lead.name }}</h4>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-light" href="{{ url_for('leads.list_leads') }}">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+    <a class="btn btn-primary" href="{{ url_for('pipeline.create', lead_id=lead.id) }}">
+      <i class="bi bi-kanban me-1"></i> Convert to Opportunity
+    </a>
+    <a class="btn btn-outline-primary" href="{{ url_for('leads.edit_lead', lead_id=lead.id) }}">
+      <i class="bi bi-pencil-square me-1"></i>Edit
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- LEFT COLUMN -->
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+
+        <!-- Status + Owner -->
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="text-muted small">Status</div>
+            {% if lead.status %}
+              <span class="badge text-bg-{{ lead.status.color }}">{{ lead.status.name }}</span>
+            {% else %}
+              <span class="badge text-bg-secondary">—</span>
+            {% endif %}
+          </div>
+
+          <div class="text-end">
+            <div class="text-muted small">Owner</div>
+            <div class="fw-semibold">{{ lead.owner.name if lead.owner else '—' }}</div>
+          </div>
+        </div>
+
+        <!-- Reassign -->
+        {% if current_user.has_perm('leads.assign') %}
+          <hr>
+          <form method="post" action="{{ url_for('leads.assign_lead', lead_id=lead.id) }}">
+            <label class="form-label small">Reassign Lead</label>
+            <div class="d-flex gap-2">
+              <select class="form-select form-select-sm" name="owner_id" required>
+                {% for u in owner_options %}
+                  <option value="{{ u.id }}" {% if lead.owner and u.id == lead.owner.id %}selected{% endif %}>
+                    {{ u.name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-sm btn-outline-dark">Assign</button>
+            </div>
+            <div class="text-muted small mt-1">
+              You can assign within your team (Admin can assign to anyone).
+            </div>
+          </form>
+        {% endif %}
+
+        <hr>
+
+        <!-- Contact -->
+        <div class="small text-muted mb-1">Contact</div>
+        <div class="mb-2">
+          <i class="bi bi-envelope me-2"></i>{{ lead.email or '—' }}
+        </div>
+        <div class="mb-2">
+          <i class="bi bi-telephone me-2"></i>
+          {% if lead.phone %}
+            {{ lead.phone_country or '' }} {{ lead.phone }}
+          {% else %}
+            —
+          {% endif %}
+        </div>
+        <div class="mb-2">
+          <i class="bi bi-geo-alt me-2"></i>{{ lead.location or '—' }}
+        </div>
+
+        <hr>
+
+        <!-- Business -->
+        <div class="small text-muted mb-1">Business</div>
+        <div class="mb-2">
+          <i class="bi bi-building me-2"></i>{{ lead.company or '—' }}
+        </div>
+        <div class="mb-2">
+          <i class="bi bi-briefcase me-2"></i>
+          {{ lead.industry.name if lead.industry else '—' }}
+        </div>
+        <div class="mb-2">
+          <i class="bi bi-tags me-2"></i>
+          {{ lead.service.name if lead.service else '—' }}
+        </div>
+        <div class="mb-0">
+          <i class="bi bi-globe me-2"></i>{{ lead.website or '—' }}
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="card shadow-soft mt-3">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Notes</div>
+        <div class="text-muted small" style="white-space: pre-wrap;">
+          {{ lead.notes or '—' }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="col-12 col-lg-8">
+
+    <!-- Quick Add Activity -->
+    <div class="card shadow-soft mb-3">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="fw-semibold">
+            <i class="bi bi-plus-circle me-1"></i>Quick Add Activity
+          </div>
+          <div class="text-muted small">This builds your KPI-ready timeline.</div>
+        </div>
+
+        <form method="post" action="{{ url_for('leads.add_activity', lead_id=lead.id) }}" class="row g-2">
+          <div class="col-12 col-md-4">
+            <label class="form-label">Type</label>
+            <select class="form-select" name="activity_type_id" required>
+              <option value="">— Select —</option>
+              {% for t in activity_types %}
+                <option value="{{ t.id }}">{{ t.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Activity Time</label>
+            <input class="form-control" type="datetime-local" name="activity_at">
+          </div>
+
+          <div class="col-12 col-md-4">
+            <label class="form-label">Next Follow-up</label>
+            <input class="form-control" type="datetime-local" name="next_follow_up_at">
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Subject</label>
+            <input class="form-control" name="subject" placeholder="e.g., Intro call completed">
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Outcome</label>
+            <input class="form-control" name="outcome" placeholder="e.g., Interested / Demo scheduled">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" name="notes" rows="2"
+              placeholder="Important points, requirements, next step..."></textarea>
+          </div>
+
+          <div class="col-12 d-flex justify-content-end gap-2">
+            <button class="btn btn-primary">
+              <i class="bi bi-check2-circle me-1"></i>Add Activity
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="fw-semibold">
+            <i class="bi bi-clock-history me-1"></i>Timeline
+          </div>
+          <div class="text-muted small">Latest 50 activities</div>
+        </div>
+
+        {% if activities|length == 0 %}
+          <div class="text-muted text-center p-4">
+            No activities yet. Add your first activity above.
+          </div>
+        {% else %}
+          <div class="vstack gap-2">
+            {% for a in activities %}
+              <div class="p-3 rounded-4 bg-light border">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div>
+                    <div class="fw-semibold">
+                      <i class="bi bi-{{ a.activity_type.icon if a.activity_type else 'activity' }} me-1"></i>
+                      {{ a.activity_type.name if a.activity_type else 'Activity' }}
+                      <span class="text-muted small">• {{ a.subject or '—' }}</span>
+                    </div>
+                    <div class="text-muted small">
+                      {{ a.activity_at.strftime("%d %b %Y, %I:%M %p") }}
+                      • by {{ a.created_by.name if a.created_by else '—' }}
+                    </div>
+                  </div>
+
+                  {% if a.next_follow_up_at %}
+                    <span class="badge text-bg-warning">
+                      Follow-up: {{ a.next_follow_up_at.strftime("%d %b %Y, %I:%M %p") }}
+                    </span>
+                  {% endif %}
+                </div>
+
+                {% if a.outcome %}
+                  <div class="mt-2">
+                    <span class="badge text-bg-info">Outcome</span>
+                    <span class="ms-1">{{ a.outcome }}</span>
+                  </div>
+                {% endif %}
+
+                {% if a.notes %}
+                  <div class="mt-2 text-muted small" style="white-space: pre-wrap;">
+                    {{ a.notes }}
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Project{% endblock %}
+{% block header %}Project{% endblock %}
+
+{% block content %}
+<style>
+  .kpi { font-size: 1.25rem; font-weight: 800; }
+  .muted { color:#6c757d; }
+  .badge-soft { padding:.4rem .6rem; border-radius:999px; font-weight:700; }
+  .b-green { background: rgba(25,135,84,.15); color:#146c43; }
+  .b-red { background: rgba(220,53,69,.15); color:#b02a37; }
+</style>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div>
+    <div class="text-muted small">{{ project.project_code }}</div>
+    <h4 class="mb-0">{{ project.name }}</h4>
+    <div class="text-muted small">
+      Quote: <a href="{{ url_for('quotes.view_quote', quote_id=project.quote_id) }}">{{ project.quote.quote_code }}</a>
+      {% if project.client %} • Client: {{ project.client.company_name }}{% endif %}
+    </div>
+  </div>
+
+  <div>
+    {% if project.margin_flag %}
+      <span class="badge-soft b-red"><i class="bi bi-flag-fill me-1"></i>Margin < 50%</span>
+    {% else %}
+      <span class="badge-soft b-green"><i class="bi bi-check2-circle me-1"></i>Margin OK</span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-md-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="muted small">Contract Value</div>
+        <div class="kpi">{{ "%.2f"|format(project.contract_value or 0) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="muted small">Total Cost</div>
+        <div class="kpi">{{ "%.2f"|format(project.total_cost or 0) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-md-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="muted small">Margin</div>
+        <div class="kpi">
+          {{ "%.2f"|format(project.margin_percent or 0) }}%
+        </div>
+        <div class="text-muted small">
+          {{ "%.2f"|format(project.margin_amount or 0) }} amount
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-soft mb-3">
+  <div class="card-body">
+    <div class="fw-semibold mb-2">Add Cost</div>
+    <form method="post" class="row g-2">
+      <div class="col-12 col-md-2">
+        <label class="form-label">Date</label>
+        <input type="date" class="form-control" name="cost_date" value="{{ (now()|string)[:10] if now is defined else '' }}">
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label">Cost Head</label>
+        <input class="form-control" name="cost_head" placeholder="Vendor / Resource / Travel / Tools" required>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label">Vendor</label>
+        <input class="form-control" name="vendor_name" placeholder="Optional">
+      </div>
+      <div class="col-12 col-md-2">
+        <label class="form-label">Amount</label>
+        <input type="number" step="0.01" min="0" class="form-control" name="amount" required>
+      </div>
+      <div class="col-12 col-md-2 d-grid">
+        <label class="form-label">&nbsp;</label>
+        <button class="btn btn-dark"><i class="bi bi-plus-lg me-1"></i>Add</button>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Notes</label>
+        <input class="form-control" name="notes" placeholder="Optional">
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-soft">
+  <div class="card-body">
+    <div class="fw-semibold mb-2">Cost Entries</div>
+
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Head</th>
+            <th>Vendor</th>
+            <th class="text-end">Amount</th>
+            <th>Notes</th>
+            <th style="width:90px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in costs %}
+          <tr>
+            <td>{{ c.cost_date }}</td>
+            <td class="fw-semibold">{{ c.cost_head }}</td>
+            <td>{{ c.vendor_name or "—" }}</td>
+            <td class="text-end">{{ "%.2f"|format(c.amount or 0) }}</td>
+            <td class="text-muted small">{{ c.notes or "" }}</td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('projects.delete_cost', cost_id=c.id) }}"
+                    onsubmit="return confirm('Delete this cost entry?');">
+                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if costs|length == 0 %}
+            <tr><td colspan="6" class="text-center text-muted p-4">No costs added yet</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

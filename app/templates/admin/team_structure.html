@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Team Structure | Crystal Nexus{% endblock %}
+{% block header %}Team Structure{% endblock %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div class="text-muted">
+    Org structure for <span class="fw-semibold">{{ current_user.name }}</span>
+    {% if show_all %}
+      • <span class="badge text-bg-light">Admin view</span>
+    {% else %}
+      • <span class="badge text-bg-light">My subtree</span>
+    {% endif %}
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary" href="{{ url_for('admin.team_dashboard') }}">
+      <i class="bi bi-people me-1"></i> Team Dashboard
+    </a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('admin.dashboard') }}">
+      <i class="bi bi-speedometer2 me-1"></i> Dashboard
+    </a>
+  </div>
+</div>
+
+<style>
+  .tree ul { list-style: none; padding-left: 1.2rem; margin: .25rem 0; }
+  .tree li { position: relative; padding-left: 1rem; }
+  .tree li:before {
+    content: "";
+    position: absolute;
+    left: .35rem;
+    top: .2rem;
+    width: .6rem;
+    height: 1.1rem;
+    border-left: 2px solid rgba(15, 23, 42, .15);
+    border-bottom: 2px solid rgba(15, 23, 42, .15);
+    border-radius: 0 0 0 .35rem;
+  }
+  .tree .node {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .35rem .6rem;
+    border-radius: .75rem;
+    background: #fff;
+    box-shadow: 0 8px 18px rgba(15,23,42,.05);
+  }
+  .tree .node .meta { line-height: 1.1; }
+  .tree .node .meta .name { font-weight: 600; }
+  .tree .node .meta .email { font-size: .8rem; color: #6c757d; }
+</style>
+
+{% macro render_node(uid) %}
+  {# children #}
+  {% set reports = mgr_map.get(uid, []) %}
+
+  {# if not admin view, show only subtree allowed_ids #}
+  {% if not show_all %}
+    {% set reports = reports | select('in', allowed_ids) | list %}
+  {% endif %}
+
+  {% if reports and reports|length > 0 %}
+    <ul>
+      {% for rid in reports %}
+        <li>
+          <div class="node">
+            <i class="bi bi-person-lines-fill text-muted"></i>
+            <div class="meta">
+              <div class="name">{{ users_by_id[rid].name }}</div>
+              <div class="email">{{ users_by_id[rid].email }}</div>
+            </div>
+          </div>
+
+          {{ render_node(rid) }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endmacro %}
+
+<div class="card shadow-soft">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-diagram-3 me-2"></i> Reporting Tree
+  </div>
+  <div class="card-body">
+
+    <div class="tree">
+      <div class="node mb-2">
+        <i class="bi bi-person-badge text-muted"></i>
+        <div class="meta">
+          <div class="name">{{ users_by_id[root_id].name }}</div>
+          <div class="email">{{ users_by_id[root_id].email }}</div>
+        </div>
+      </div>
+
+      {{ render_node(root_id) }}
+    </div>
+
+    <div class="text-muted small mt-3">
+      Hierarchy is based on <code>employee_profiles.reporting_manager_user_id</code>.
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

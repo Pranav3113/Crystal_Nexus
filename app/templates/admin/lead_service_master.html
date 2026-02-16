@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .btn-orange { background:#f57c00; border-color:#f57c00; color:#fff; }
+  .btn-orange:hover { filter: brightness(0.95); color:#fff; }
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+  .muted { color:#6c757d; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Lead Service Master</h4>
+    <div class="muted">Manage services used in Leads</div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card card-soft">
+      <div class="card-body">
+        <h6 class="mb-3">{% if edit_item %}Edit Service{% else %}Add Service{% endif %}</h6>
+
+        <form method="post">
+          <input type="hidden" name="action" value="{% if edit_item %}update{% else %}create{% endif %}">
+          {% if edit_item %}
+            <input type="hidden" name="id" value="{{ edit_item.id }}">
+          {% endif %}
+
+          <div class="mb-2">
+            <label class="form-label">Name</label>
+            <input class="form-control" name="name" value="{{ edit_item.name if edit_item else '' }}" required>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Sort Order</label>
+            <input class="form-control" type="number" name="sort_order" value="{{ edit_item.sort_order if edit_item else 0 }}">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Active</label>
+            <select class="form-select" name="is_active">
+              {% set active_val = (1 if (edit_item and edit_item.is_active) or (not edit_item) else 0) %}
+              <option value="1" {% if active_val == 1 %}selected{% endif %}>Yes</option>
+              <option value="0" {% if active_val == 0 %}selected{% endif %}>No</option>
+            </select>
+          </div>
+
+          <button class="btn btn-orange w-100" type="submit">
+            {% if edit_item %}Update{% else %}Add{% endif %}
+          </button>
+
+          {% if edit_item %}
+            <a class="btn btn-light w-100 mt-2" href="{{ url_for('admin_services.lead_services_master') }}">Cancel</a>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card card-soft">
+      <div class="card-body">
+        <form class="row g-2 mb-3" method="get">
+          <div class="col-md-8">
+            <input class="form-control" name="q" placeholder="Search service..." value="{{ q }}">
+          </div>
+          <div class="col-md-4 d-grid">
+            <button class="btn btn-outline-secondary">Search</button>
+          </div>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th class="text-center">Order</th>
+                <th class="text-center">Active</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in items %}
+                <tr>
+                  <td>{{ s.name }}</td>
+                  <td class="text-center">{{ s.sort_order }}</td>
+                  <td class="text-center">
+                    {% if s.is_active %}
+                      <span class="badge bg-success">Yes</span>
+                    {% else %}
+                      <span class="badge bg-secondary">No</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="{{ url_for('admin_services.lead_services_master', edit_id=s.id, q=q) }}">Edit</a>
+
+                    <form method="post"
+                          action="{{ url_for('admin_services.delete_lead_service', service_id=s.id) }}"
+                          style="display:inline"
+                          onsubmit="return confirm('Delete this service?');">
+                      <button class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% else %}
+                <tr><td colspan="4" class="text-center muted py-4">No services found</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

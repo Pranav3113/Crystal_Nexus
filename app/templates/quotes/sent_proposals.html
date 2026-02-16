@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block title %}Proposals Sent{% endblock %}
+{% block header %}Proposals Sent{% endblock %}
+
+{% block content %}
+
+<style>
+  .badge-soft {
+    padding: .45rem .75rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: .75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    white-space: nowrap;
+  }
+  .badge-sent { background: rgba(13,110,253,.12); color:#0b5ed7; }
+  .badge-confirmed { background: rgba(25,135,84,.14); color:#146c43; }
+  .badge-pending { background: rgba(245,124,0,.15); color:#c25f00; }
+  .badge-locked { background: rgba(220,53,69,.10); color:#b02a37; }
+  .badge-doc { background: rgba(33,37,41,.12); color:#212529; }
+
+  .card-soft {
+    border: 1px solid rgba(0,0,0,.06);
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.04);
+  }
+
+  .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+</style>
+
+<div class="card card-soft">
+  <div class="card-body">
+
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+      <div>
+        <div class="fw-semibold">
+          All proposals with status
+          <span class="badge-soft badge-sent"><i class="bi bi-send-check"></i> Sent</span>
+        </div>
+        <div class="text-muted small">
+          Confirming a proposal unlocks payments. After confirmation, Sales can request PI → then Invoice.
+        </div>
+      </div>
+
+      <div style="max-width:320px;">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white">
+            <i class="bi bi-search"></i>
+          </span>
+          <input id="q" type="text" class="form-control"
+                 placeholder="Search quote / opp / company...">
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead class="table-light">
+          <tr>
+            <th style="width:140px;">Quote</th>
+            <th>Opportunity</th>
+            <th style="width:150px;" class="text-end">Total</th>
+            <th style="width:190px;">Confirmation</th>
+            <th style="width:170px;">PI</th>
+            <th style="width:170px;">Invoice</th>
+            <th class="text-end" style="width:420px;">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody id="rows">
+
+          {% for q in items %}
+          {% set latest_pi = latest_pi_by_quote.get(q.id) %}
+          {% set pi_exists = latest_pi is not none %}
+          {% set pi_pending = (q.pi_request_status == "Pending") %}
+
+          {% set latest_inv = (latest_invoice_by_quote.get(q.id) if latest_invoice_by_quote is defined else none) %}
+          {% set inv_exists = latest_inv is not none %}
+          {% set inv_pending = (q.invoice_request_status == "Pending") %}
+          {% set inv_approved = (q.invoice_request_status == "Approved") %}
+
+          <tr>
+
+            <!-- Quote -->
+            <td>
+              <div class="fw-semibold">
+                <a class="text-decoration-none"
+                   href="{{ url_for('quotes.view_quote', quote_id=q.id) }}">
+                  {{ q.quote_code }}
+                </a>
+              </div>
+              <div class="small text-muted">
+                Version {{ q.version }}
+              </div>
+            </td>
+
+            <!-- Opportunity -->
+            <td>
+              <div class="fw-semibold">
+                {{ q.opportunity.title if q.opportunity else '—' }}
+              </div>
+              <div class="small text-muted">
+                {{ q.opportunity.company if q.opportunity else '—' }}
+              </div>
+            </td>
+
+            <!-- Total -->
+            <td class="text-end">
+              <div class="fw-semibold mono">₹ {{ (q.total_amount or q.total or 0) }}</div>
+              <div class="small text-muted mono">GST: {{ q.tax or 0 }}</div>
+            </td>
+
+            <!-- Confirmation -->
+            <td>
+              {% if q.proposal_confirmed_at %}
+                <div class="badge-soft badge-confirmed">
+                  <i class="bi bi-check2-circle"></i> Confirmed
+                </div>
+                <div class="small text-muted mt-1">
+                  {{ q.proposal_confirmed_at.strftime("%d %b %Y, %I:%M %p") }}
+                  {% if q.proposal_confirmed_by %}
+                    <div>by {{ q.proposal_confirmed_by.name }}</div>
+                  {% endif %}
+                </div>
+              {% else %}
+                <div class="badge-soft badge-pending">
+                  <i class="bi bi-hourglass-split"></i> Not Confirmed
+                </div>
+                <div class="small badge-soft badge-locked mt-1">
+                  <i class="bi bi-lock"></i> Payments Locked
+                </div>
+              {% endif %}
+            </td>
+
+            <!-- PI -->
+            <td>
+              {% if pi_exists %}
+                <div class="badge-soft badge-doc"><i class="bi bi-receipt"></i> PI Created</div>
+                <div class="small text-muted mt-1">{{ latest_pi.pi_no }}</div>
+              {% elif pi_pending %}
+                <div class="badge-soft badge-pending"><i class="bi bi-send"></i> PI Requested</div>
+                <div class="small text-muted mt-1">Awaiting Finance</div>
+              {% else %}
+                <div class="badge-soft badge-locked"><i class="bi bi-x-circle"></i> Not Requested</div>
+                <div class="small text-muted mt-1">—</div>
+              {% endif %}
+            </td>
+
+            <!-- Invoice -->
+            <td>
+              {% if inv_exists %}
+                <div class="badge-soft badge-doc"><i class="bi bi-file-earmark-text"></i> Invoice Created</div>
+                <div class="small text-muted mt-1">{{ latest_inv.invoice_no }}</div>
+              {% elif inv_pending %}
+                <div class="badge-soft badge-pending"><i class="bi bi-send"></i> Invoice Requested</div>
+                <div class="small text-muted mt-1">Awaiting Finance</div>
+              {% elif inv_approved and (not inv_exists) %}
+                <div class="badge-soft badge-pending"><i class="bi bi-exclamation-triangle"></i> Check</div>
+                <div class="small text-muted mt-1">Approved but not found</div>
+              {% else %}
+                <div class="badge-soft badge-locked"><i class="bi bi-x-circle"></i> Not Requested</div>
+                <div class="small text-muted mt-1">—</div>
+              {% endif %}
+            </td>
+
+            <!-- Actions -->
+            <td class="text-end">
+              <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
+
+                <!-- Download Proposal -->
+                <a class="btn btn-outline-primary btn-sm"
+                   href="{{ url_for('quotes.download_proposal', quote_id=q.id) }}">
+                  <i class="bi bi-download me-1"></i>
+                  Proposal
+                </a>
+
+                {% if not q.proposal_confirmed_at %}
+
+                  <!-- Confirm Proposal -->
+                  <form method="post"
+                        class="m-0"
+                        action="{{ url_for('quotes.confirm_proposal', quote_id=q.id) }}"
+                        onsubmit="return confirm('Confirm this proposal? This will unlock payments.');">
+                    <button class="btn btn-success btn-sm">
+                      <i class="bi bi-check2-circle me-1"></i>
+                      Confirm
+                    </button>
+                  </form>
+
+                {% else %}
+
+                  <!-- Payments (after confirm) -->
+                  <a class="btn btn-outline-success btn-sm"
+                     href="{{ url_for('payments.quote_payments', quote_id=q.id) }}">
+                    <i class="bi bi-cash-coin me-1"></i>
+                    Payments
+                  </a>
+
+                  <!-- ============== PI FLOW ============== -->
+
+                  <!-- Sales: Request PI -->
+                  {% if (not pi_exists) and (not pi_pending) and current_user.has_perm("proforma.request") %}
+                    <form method="post"
+                          class="m-0"
+                          action="{{ url_for('quotes.request_pi', quote_id=q.id) }}"
+                          onsubmit="return confirm('Send PI request to Finance?');">
+                      <input type="hidden" name="pi_request_note" value="">
+                      <button class="btn btn-outline-dark btn-sm">
+                        <i class="bi bi-send me-1"></i>
+                        Request PI
+                      </button>
+                    </form>
+                  {% endif %}
+
+                  <!-- Finance: Generate PI -->
+                  {% if (not pi_exists) and pi_pending and current_user.has_perm("proforma.generate") %}
+                    <form method="post"
+                          class="m-0"
+                          action="{{ url_for('proforma.create_pi_from_quote', quote_id=q.id) }}"
+                          onsubmit="return confirm('Generate Proforma Invoice now?');">
+                      <button class="btn btn-dark btn-sm">
+                        <i class="bi bi-receipt me-1"></i>
+                        Generate PI
+                      </button>
+                    </form>
+                  {% endif %}
+
+                  <!-- View PI -->
+                  {% if pi_exists and current_user.has_perm("proforma.view") %}
+                    <a class="btn btn-outline-dark btn-sm"
+                       href="{{ url_for('proforma.view_pi', pi_id=latest_pi.id) }}">
+                      <i class="bi bi-receipt me-1"></i>
+                      View PI
+                    </a>
+                  {% endif %}
+
+                  <!-- ============== INVOICE FLOW ============== -->
+
+                  <!-- Sales: Request Invoice (only after PI exists, and not already requested/created) -->
+                  {% if pi_exists and (not inv_exists) and (not inv_pending) and current_user.has_perm("invoices.request") %}
+                    <form method="post"
+                          class="m-0"
+                          action="{{ url_for('quotes.request_invoice', quote_id=q.id) }}"
+                          onsubmit="return confirm('Send Invoice request to Finance?');">
+                      <input type="hidden" name="invoice_request_note" value="">
+                      <button class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-send me-1"></i>
+                        Request Inv
+                      </button>
+                    </form>
+                  {% endif %}
+
+                  <!-- Finance: Generate Invoice (only if invoice request pending AND PI exists) -->
+                  {% if pi_exists and (not inv_exists) and inv_pending and current_user.has_perm("invoices.generate") %}
+                    <form method="post"
+                          class="m-0"
+                          action="{{ url_for('invoices.create_invoice_from_pi', pi_id=latest_pi.id) }}"
+                          onsubmit="return confirm('Generate Invoice now?');">
+                      <button class="btn btn-secondary btn-sm">
+                        <i class="bi bi-file-earmark-text me-1"></i>
+                        Generate Inv
+                      </button>
+                    </form>
+                  {% endif %}
+
+                  <!-- View Invoice -->
+                  {% if inv_exists and current_user.has_perm("invoices.view") %}
+                    <a class="btn btn-outline-secondary btn-sm"
+                       href="{{ url_for('invoices.view_invoice', invoice_id=latest_inv.id) }}">
+                      <i class="bi bi-file-earmark-text me-1"></i>
+                      View Inv
+                    </a>
+                  {% endif %}
+
+                {% endif %}
+
+              </div>
+            </td>
+
+          </tr>
+          {% endfor %}
+
+          {% if items|length == 0 %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-5">
+              <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+              No sent proposals found.
+            </td>
+          </tr>
+          {% endif %}
+
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- Search Filter -->
+<script>
+  const q = document.getElementById('q');
+  const rows = document.querySelectorAll('#rows tr');
+
+  q?.addEventListener('input', () => {
+    const needle = (q.value || '').toLowerCase();
+    rows.forEach(r => {
+      const txt = (r.innerText || '').toLowerCase();
+      r.style.display = txt.includes(needle) ? '' : 'none';
+    });
+  });
+</script>
+
+{% endblock %}

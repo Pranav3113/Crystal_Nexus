@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .btn-orange { background:#f57c00; border-color:#f57c00; color:#fff; }
+  .btn-orange:hover { filter: brightness(0.95); color:#fff; }
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+  .muted { color:#6c757d; }
+  .tiny{ font-size:.85rem; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-1">Finance Verification</h4>
+    <div class="muted">Payment updates awaiting verification.</div>
+  </div>
+</div>
+
+<form class="card card-soft p-3 mb-3" method="GET">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Search</label>
+      <input class="form-control" name="q" value="{{ q }}" placeholder="Quote ID / Lead ID / Reference / Type">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Status</label>
+      <select class="form-select" name="status">
+        <option value="Pending" {% if status=='Pending' %}selected{% endif %}>Pending</option>
+        <option value="Verified" {% if status=='Verified' %}selected{% endif %}>Verified</option>
+        <option value="Rejected" {% if status=='Rejected' %}selected{% endif %}>Rejected</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">From</label>
+      <input type="date" class="form-control" name="date_from" value="{{ date_from }}">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">To</label>
+      <input type="date" class="form-control" name="date_to" value="{{ date_to }}">
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filter</button>
+      <a class="btn btn-outline-secondary w-100" href="{{ url_for('payments.finance_payment_queue') }}">Reset</a>
+    </div>
+  </div>
+</form>
+
+<div class="card card-soft p-3">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:120px;">Date</th>
+          <th style="width:130px;">Amount</th>
+          <th style="width:120px;">Type</th>
+          <th>Reference</th>
+          <th style="width:220px;">Quote</th>
+          <th style="width:300px;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if pending|length == 0 %}
+          <tr><td colspan="6" class="text-center muted py-4">No records found.</td></tr>
+        {% else %}
+          {% for p in pending %}
+            {% set qt = quote_map.get(p.invoice_id) %}
+            <tr>
+              <td>{{ p.payment_date.strftime("%d-%b-%Y") if p.payment_date else "-" }}</td>
+              <td>₹ {{ "%.2f"|format(p.amount|float) }}</td>
+              <td>{{ p.transfer_type }}</td>
+              <td class="text-break">{{ p.reference or "-" }}</td>
+              <td>
+                <div><strong>#{{ p.invoice_id }}</strong></div>
+                {% if p.lead_id %}<div class="small muted">Lead #{{ p.lead_id }}</div>{% endif %}
+                {% if qt %}
+                  <div class="tiny muted">
+                    Total: ₹ {{ "%.2f"|format(qt.total_amount|float) }}
+                    • Collected: ₹ {{ "%.2f"|format(qt.collected_amount()|float) }}
+                    • Remaining: ₹ {{ "%.2f"|format(qt.remaining_amount()|float) }}
+                  </div>
+                  <div class="mt-1">
+                    <a class="small text-decoration-none" href="{{ url_for('payments.quote_payments', quote_id=p.invoice_id) }}">
+                      Open payment page →
+                    </a>
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.status == "Pending" %}
+                  <form method="POST" action="{{ url_for('payments.finance_payment_action', payment_id=p.id) }}" class="d-flex gap-2">
+                    <input type="text" name="finance_remarks" class="form-control form-control-sm"
+                           placeholder="Remarks (optional)">
+                    <button class="btn btn-sm btn-success" name="action" value="verify"
+                            onclick="return confirm('Verify this payment?');">
+                      Verify
+                    </button>
+                    <button class="btn btn-sm btn-danger" name="action" value="reject"
+                            onclick="return confirm('Reject this payment?');">
+                      Reject
+                    </button>
+                  </form>
+                  <div class="small muted mt-1">System re-checks quote cap before verifying.</div>
+                {% else %}
+                  <div class="small">
+                    <div><strong>Status:</strong> {{ p.status }}</div>
+                    <div class="muted"><strong>Remarks:</strong> {{ p.finance_remarks or "-" }}</div>
+                    <div class="muted"><strong>At:</strong> {{ p.verified_at.strftime("%d-%b-%Y %H:%M") if p.verified_at else "-" }}</div>
+                  </div>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

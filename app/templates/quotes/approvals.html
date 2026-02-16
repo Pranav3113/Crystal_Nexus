@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Approvals{% endblock %}
+{% block header %}Approvals{% endblock %}
+
+{% block content %}
+<style>
+  .shadow-soft { box-shadow: 0 6px 18px rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.06); border-radius: 14px; }
+  .mono { font-variant-numeric: tabular-nums; }
+</style>
+
+{% set show_waiting = (request.args.get('show_waiting') in ['1','true','yes','on']) %}
+
+{% macro money(v) -%}
+  {%- if v is none -%}0.00
+  {%- else -%}
+    {%- set s = v|string -%}
+    {%- set s = s|replace(",", "") -%}
+    {%- if s == "" -%}0.00{%- else -%}{{ "%.2f"|format(s|float) }}{%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Approval Inbox</h4>
+    <div class="text-muted">Quotes waiting for your approval (user or role mapping • sequential).</div>
+  </div>
+
+  <div class="d-flex gap-2 align-items-center">
+    {% if show_waiting %}
+      <a class="btn btn-sm btn-outline-dark"
+         href="{{ url_for('quotes.approvals_inbox') }}">
+        <i class="bi bi-funnel me-1"></i>Show Pending Only
+      </a>
+    {% else %}
+      <a class="btn btn-sm btn-outline-primary"
+         href="{{ url_for('quotes.approvals_inbox', show_waiting=1) }}">
+        <i class="bi bi-eye me-1"></i>Show Pending + Waiting
+      </a>
+    {% endif %}
+
+    <span class="badge text-bg-warning">
+      Pending: {{ items | selectattr("status", "equalto", "PENDING") | list | length }}
+    </span>
+    {% if show_waiting %}
+      <span class="badge text-bg-secondary">
+        Waiting: {{ items | selectattr("status", "equalto", "WAITING") | list | length }}
+      </span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card shadow-soft">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Quote</th>
+          <th>Opportunity</th>
+          <th>Total</th>
+          <th>Rule</th>
+          <th style="width:90px;">Step</th>
+          <th style="width:160px;">Assigned To</th>
+          <th style="width:120px;">Status</th>
+          <th class="text-end" style="width:340px;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in items %}
+        {% set opp = a.quote.opportunity if a.quote else None %}
+        <tr>
+          <td class="fw-semibold">
+            {% if a.quote %}
+              <a class="text-decoration-none" href="{{ url_for('quotes.view_quote', quote_id=a.quote.id) }}">
+                {{ a.quote.quote_code }}
+              </a>
+              <div class="text-muted small">V{{ a.quote.version }}</div>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if opp %}
+              <div class="fw-semibold">{{ opp.opp_code }}</div>
+              <div class="text-muted small">{{ opp.title }}</div>
+            {% else %}
+              <div class="text-muted">—</div>
+            {% endif %}
+          </td>
+
+          <td class="mono">
+            {% if a.quote %}
+              {{ money(a.quote.total) }}
+            {% else %}
+              0.00
+            {% endif %}
+          </td>
+
+          <td>
+            <div class="fw-semibold">{{ a.rule.name if a.rule else '—' }}</div>
+            {% if a.rule and (a.rule.min_amount is not none or a.rule.max_amount is not none) %}
+              <div class="text-muted small">
+                Min: {{ money(a.rule.min_amount or 0) }} •
+                Max: {{ money(a.rule.max_amount) if a.rule.max_amount is not none else '∞' }}
+              </div>
+            {% endif %}
+          </td>
+
+          <td>
+            <span class="badge text-bg-light text-dark">#{{ a.step_order or 1 }}</span>
+          </td>
+
+          <td>
+            {% if a.approver_user %}
+              <span class="badge text-bg-primary">
+                <i class="bi bi-person-check me-1"></i>{{ a.approver_user.name }}
+              </span>
+              <div class="text-muted small">User-mapped</div>
+            {% else %}
+              <span class="badge text-bg-secondary">
+                <i class="bi bi-people me-1"></i>{{ a.approver_role or '—' }}
+              </span>
+              <div class="text-muted small">Role-mapped</div>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if a.status == "PENDING" %}
+              <span class="badge text-bg-warning">PENDING</span>
+            {% elif a.status == "WAITING" %}
+              <span class="badge text-bg-secondary">WAITING</span>
+            {% elif a.status == "APPROVED" %}
+              <span class="badge text-bg-success">APPROVED</span>
+            {% elif a.status == "REJECTED" %}
+              <span class="badge text-bg-danger">REJECTED</span>
+            {% elif a.status == "CANCELLED" %}
+              <span class="badge text-bg-light text-dark">CANCELLED</span>
+            {% else %}
+              <span class="badge text-bg-light text-dark">{{ a.status }}</span>
+            {% endif %}
+          </td>
+
+          <td class="text-end">
+            {% if a.status == "PENDING" %}
+              <form method="post"
+                    action="{{ url_for('quotes.act_on_approval', approval_id=a.id) }}"
+                    class="d-flex gap-2 justify-content-end align-items-center">
+                {# CSRF if you have Flask-WTF; harmless otherwise #}
+                {% if csrf_token is defined %}
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% endif %}
+
+                <input class="form-control form-control-sm"
+                       name="remark"
+                       placeholder="Remark (optional)"
+                       style="max-width:220px;">
+
+                <button class="btn btn-sm btn-success" name="decision" value="APPROVE" type="submit">
+                  <i class="bi bi-check2-circle me-1"></i>Approve
+                </button>
+
+                <button class="btn btn-sm btn-danger" name="decision" value="REJECT" type="submit"
+                        onclick="return confirm('Reject this quote approval step?');">
+                  <i class="bi bi-x-circle me-1"></i>Reject
+                </button>
+              </form>
+            {% else %}
+              <span class="text-muted small">No action required</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+
+        {% if items|length == 0 %}
+        <tr>
+          <td colspan="8" class="text-center text-muted p-5">
+            {% if show_waiting %}
+              No pending/waiting approvals 🎉
+            {% else %}
+              No pending approvals 🎉
+            {% endif %}
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

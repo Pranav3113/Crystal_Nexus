@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+{% block title %}Edit Quote{% endblock %}
+{% block header %}Quotes{% endblock %}
+
+{% block content %}
+<style>
+  .shadow-soft { box-shadow: 0 6px 18px rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.06); border-radius: 14px; }
+  .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  .w-140 { width: 140px; }
+  .w-160 { width: 160px; }
+  .w-180 { width: 180px; }
+  .small-muted { color:#64748b; font-size:.85rem; }
+  .sticky-side { position: sticky; top: 14px; }
+  .save-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+</style>
+
+{# currency map to show symbol in rows #}
+{% set currency_map = {} %}
+{% for c in currencies %}
+  {% set _ = currency_map.update({(c.code|upper): (c.symbol or c.code)}) %}
+{% endfor %}
+{% set cur_code = (q.currency or 'INR')|upper %}
+{% set cur_symbol = currency_map.get(cur_code, cur_code) %}
+
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <div>
+    <div class="text-muted small">{{ q.quote_code }} • Version {{ q.version }}</div>
+    <h4 class="mb-0">Edit Quote</h4>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-light" href="{{ url_for('quotes.view_quote', quote_id=q.id) }}">
+      <i class="bi bi-eye me-1"></i>View
+    </a>
+
+    <form method="post" action="{{ url_for('quotes.request_approval', quote_id=q.id) }}" class="m-0">
+      <button class="btn btn-dark" type="submit"
+              onclick="return confirm('Request approval for this quote? Make sure amounts are final.');">
+        <i class="bi bi-send-check me-1"></i>Request Approval
+      </button>
+    </form>
+  </div>
+</div>
+
+<form method="post" id="quoteForm">
+  <div class="row g-3">
+
+    <!-- LEFT: ITEMS -->
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-soft">
+        <div class="card-body">
+
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="fw-semibold">Line Items</div>
+
+            <a class="btn btn-sm btn-outline-primary"
+               href="{{ url_for('quotes.add_item', quote_id=q.id) }}">
+              <i class="bi bi-plus-lg me-1"></i>Add Item
+            </a>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Item</th>
+                  <th class="w-180">Service</th>
+                  <th class="w-160">Billing</th>
+                  <th class="w-140">Qty</th>
+                  <th class="w-160">Rate</th>
+                  <th class="w-160 text-end">Amount</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {% for it in items %}
+                <tr data-item-id="{{ it.id }}">
+                  <td style="min-width: 280px;">
+                    <input type="hidden" name="item_id" value="{{ it.id }}">
+
+                    <input class="form-control mb-1 autosave"
+                           name="item_name_{{it.id}}"
+                           value="{{ it.item_name }}"
+                           placeholder="Item name">
+
+                    <textarea class="form-control autosave"
+                              name="item_desc_{{it.id}}"
+                              rows="2"
+                              placeholder="Description">{{ it.description or '' }}</textarea>
+
+                    <div class="small-muted mt-1">
+                      Tip: Billing cycle multiplies the Amount (Monthly ×1, Half-yearly ×6, Annual ×12)
+                    </div>
+                  </td>
+
+                  <td>
+                    <select class="form-select autosave serviceSel"
+                            name="item_service_id_{{ it.id }}">
+                      <option value="">— Select —</option>
+                      {% for s in services %}
+                        <option value="{{ s.id }}" {% if it.service_id == s.id %}selected{% endif %}>
+                          {{ s.name }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                    <div class="small-muted mt-1">Optional</div>
+                  </td>
+
+                  <td>
+                    {% set bc = (it.billing_cycle or 'ONETIME')|upper %}
+                    <select class="form-select autosave cycleSel"
+                            name="item_billing_cycle_{{ it.id }}">
+                      <option value="ONETIME" {% if bc == 'ONETIME' %}selected{% endif %}>One-time (×1)</option>
+                      <option value="MONTHLY" {% if bc == 'MONTHLY' %}selected{% endif %}>Monthly (×1)</option>
+                      <option value="HALF_YEARLY" {% if bc == 'HALF_YEARLY' %}selected{% endif %}>Half-yearly (×6)</option>
+                      <option value="ANNUAL" {% if bc == 'ANNUAL' %}selected{% endif %}>Annual (×12)</option>
+                    </select>
+
+                    <div class="small-muted mt-1" id="multHint_{{ it.id }}"></div>
+                  </td>
+
+                  <td>
+                    <input class="form-control autosave qty"
+                           name="item_qty_{{it.id}}"
+                           value="{{ it.qty }}"
+                           inputmode="decimal"
+                           placeholder="0">
+                  </td>
+
+                  <td>
+                    <input class="form-control autosave rate"
+                           name="item_rate_{{it.id}}"
+                           value="{{ it.rate }}"
+                           inputmode="decimal"
+                           placeholder="0.00">
+                  </td>
+
+                  <td class="fw-semibold text-end mono">
+                    <span class="curSymbol">{{ cur_symbol }}</span>
+                    <span class="itemAmount">{{ (it.amount or 0) }}</span>
+                  </td>
+                </tr>
+                {% endfor %}
+
+                {% if items|length == 0 %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                      No line items yet. Click <b>Add Item</b>.
+                    </td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="d-flex align-items-center justify-content-between mt-2">
+            <div class="small-muted">
+              Auto-save is ON ✅
+            </div>
+
+            <div class="d-flex align-items-center gap-2 small-muted" id="saveState">
+              <span class="save-dot bg-secondary" id="saveDot"></span>
+              <span id="saveText">Idle</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: SUMMARY -->
+    <div class="col-12 col-lg-4">
+      <div class="card shadow-soft sticky-side">
+        <div class="card-body">
+          <div class="fw-semibold mb-2">Summary</div>
+
+          <!-- Currency (DB driven) -->
+          <div class="mb-2">
+            <label class="form-label">Currency</label>
+            <select class="form-select autosave-global" id="currencySelect" name="currency">
+              {% for c in currencies %}
+                <option value="{{ c.code }}"
+                  {% if (q.currency or 'INR')|upper == c.code|upper %}selected{% endif %}>
+                  {{ c.code }}{% if c.symbol %} ({{ c.symbol }}){% endif %} — {{ c.name }}
+                </option>
+              {% endfor %}
+            </select>
+            <div class="small-muted mt-1">GST is available only for INR.</div>
+          </div>
+
+          <!-- Estimated Closure Date -->
+          <div class="mb-2">
+            <label class="form-label">Estimated Closure Date</label>
+            <input type="date"
+                   class="form-control autosave-global"
+                   id="closureDateInput"
+                   name="estimated_closure_date"
+                   value="{{ q.estimated_closure_date.strftime('%Y-%m-%d') if q.estimated_closure_date else '' }}">
+            <div class="small-muted mt-1">Forecast date for this quote closure.</div>
+          </div>
+
+          <!-- GST block (hidden for non-INR) -->
+          <div id="gstBlock">
+
+            <div class="mb-2">
+              <label class="form-label">Customer Billing State</label>
+              <input class="form-control autosave-global"
+                     id="billingStateInput"
+                     name="billing_state"
+                     value="{{ q.billing_state or '' }}"
+                     placeholder="e.g. Maharashtra">
+              <div class="small-muted mt-1">
+                Required to calculate GST before client conversion.
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label">Customer GSTIN (optional)</label>
+              <input class="form-control autosave-global"
+                     id="billingGstinInput"
+                     name="billing_gstin"
+                     value="{{ q.billing_gstin or '' }}"
+                     placeholder="GSTIN">
+            </div>
+
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input autosave-global"
+                     type="checkbox"
+                     id="gstApplicableInput"
+                     {% if q.is_gst_applicable %}checked{% endif %}>
+              <label class="form-check-label" for="gstApplicableInput">
+                GST Applicable
+              </label>
+            </div>
+
+            <div class="alert alert-info py-2 small mb-2">
+              <i class="bi bi-info-circle me-1"></i>
+              GST is calculated automatically based on Company Branch vs Customer Billing State (or Client Branch after conversion).
+            </div>
+
+          </div><!-- /gstBlock -->
+
+          <div class="mb-2">
+            <label class="form-label">Discount</label>
+            <input class="form-control autosave-global"
+                   id="discountInput"
+                   name="discount"
+                   value="{{ q.discount }}"
+                   inputmode="decimal"
+                   placeholder="0.00">
+          </div>
+
+          <div class="mt-3 p-3 rounded-4 bg-light border">
+            <div class="d-flex justify-content-between">
+              <div class="text-muted">Subtotal</div>
+              <div class="mono" id="subtotalText">{{ q.subtotal or 0 }}</div>
+            </div>
+
+            <div class="d-flex justify-content-between">
+              <div class="text-muted">Discount</div>
+              <div class="mono" id="discountText">{{ q.discount or 0 }}</div>
+            </div>
+
+            <hr class="my-2">
+
+            <div id="gstTotalsBlock">
+              <div class="d-flex justify-content-between">
+                <div class="text-muted">CGST</div>
+                <div class="mono" id="cgstText">{{ q.cgst or 0 }}</div>
+              </div>
+              <div class="d-flex justify-content-between">
+                <div class="text-muted">SGST</div>
+                <div class="mono" id="sgstText">{{ q.sgst or 0 }}</div>
+              </div>
+              <div class="d-flex justify-content-between">
+                <div class="text-muted">IGST</div>
+                <div class="mono" id="igstText">{{ q.igst or 0 }}</div>
+              </div>
+
+              <hr class="my-2">
+
+              <div class="d-flex justify-content-between">
+                <div class="text-muted">Total GST</div>
+                <div class="mono fw-semibold" id="taxText">{{ q.tax or 0 }}</div>
+              </div>
+            </div><!-- /gstTotalsBlock -->
+
+            <div class="d-flex justify-content-between mt-1">
+              <div class="text-muted">Total</div>
+              <div class="fw-semibold mono" id="totalText">{{ q.total or 0 }}</div>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Customer Notes</label>
+            <textarea class="form-control" name="customer_notes" rows="3">{{ q.customer_notes or '' }}</textarea>
+          </div>
+
+          <div class="mt-2">
+            <label class="form-label">Internal Notes</label>
+            <textarea class="form-control" name="notes" rows="2">{{ q.notes or '' }}</textarea>
+          </div>
+
+          <!-- Hidden field for normal POST submit -->
+          <input type="hidden" name="is_gst_applicable" id="gstApplicableHidden" value="{{ '1' if q.is_gst_applicable else '0' }}">
+
+          <div class="d-flex justify-content-end mt-3">
+            <button class="btn btn-primary" type="submit">
+              <i class="bi bi-save2 me-1"></i>Save
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</form>
+
+<script>
+(function () {
+  const quoteId = {{ q.id }};
+  let debounceTimer = null;
+
+  const multMap = {
+    "ONETIME": 1,
+    "MONTHLY": 1,
+    "HALF_YEARLY": 6,
+    "ANNUAL": 12
+  };
+
+  const saveDot = document.getElementById("saveDot");
+  const saveText = document.getElementById("saveText");
+
+  function setSaveState(state) {
+    if (!saveDot || !saveText) return;
+
+    if (state === "saving") {
+      saveDot.className = "save-dot bg-warning";
+      saveText.textContent = "Saving…";
+    } else if (state === "saved") {
+      saveDot.className = "save-dot bg-success";
+      saveText.textContent = "Saved";
+      setTimeout(() => {
+        saveDot.className = "save-dot bg-secondary";
+        saveText.textContent = "Idle";
+      }, 1200);
+    } else if (state === "error") {
+      saveDot.className = "save-dot bg-danger";
+      saveText.textContent = "Save failed";
+    } else {
+      saveDot.className = "save-dot bg-secondary";
+      saveText.textContent = "Idle";
+    }
+  }
+
+  function cleanNum(v) {
+    v = (v ?? "").toString().trim().replace(/,/g, "");
+    if (v === "" || v === "-" ) return "0";
+    return v;
+  }
+
+  function money(n) {
+    const x = parseFloat(n || 0);
+    return isNaN(x) ? "0.00" : x.toFixed(2);
+  }
+
+  function updateMultiplierHints() {
+    document.querySelectorAll("tbody tr[data-item-id]").forEach(row => {
+      const itemId = row.getAttribute("data-item-id");
+      const cycleEl = row.querySelector(`select[name="item_billing_cycle_${itemId}"]`);
+      const hintEl = document.getElementById(`multHint_${itemId}`);
+      if (!cycleEl || !hintEl) return;
+      const cyc = (cycleEl.value || "ONETIME").toUpperCase();
+      hintEl.textContent = `Multiplier: ×${multMap[cyc] || 1}`;
+    });
+  }
+
+  function syncGstHidden() {
+    const sw = document.getElementById("gstApplicableInput");
+    const hidden = document.getElementById("gstApplicableHidden");
+    if (!sw || !hidden) return;
+    hidden.value = sw.checked ? "1" : "0";
+  }
+
+  function applyCurrencyRules() {
+    const cur = (document.getElementById("currencySelect")?.value || "INR").toUpperCase();
+    const gstBlock = document.getElementById("gstBlock");
+    const gstTotals = document.getElementById("gstTotalsBlock");
+    const gstSw = document.getElementById("gstApplicableInput");
+    const hidden = document.getElementById("gstApplicableHidden");
+
+    const isINR = (cur === "INR");
+
+    if (gstBlock) gstBlock.style.display = isINR ? "" : "none";
+    if (gstTotals) gstTotals.style.display = isINR ? "" : "none";
+
+    if (!isINR) {
+      if (gstSw) gstSw.checked = false;
+      if (hidden) hidden.value = "0";
+    } else {
+      syncGstHidden();
+    }
+
+    // update symbol in left table
+    const sym = document.querySelector(`#currencySelect option:checked`)?.textContent || cur;
+    // best effort: set symbol to the option's "CODE (₹)" part
+    const code = cur;
+    let display = code;
+    const m = sym.match(/\(([^)]+)\)/);
+    if (m && m[1]) display = m[1];
+    document.querySelectorAll(".curSymbol").forEach(el => el.textContent = display);
+  }
+
+  async function autosaveRow(row) {
+    const itemId = row.getAttribute("data-item-id");
+    if (!itemId) return;
+
+    const nameEl = row.querySelector(`input[name="item_name_${itemId}"]`);
+    const descEl = row.querySelector(`textarea[name="item_desc_${itemId}"]`);
+    const qtyEl  = row.querySelector(`input[name="item_qty_${itemId}"]`);
+    const rateEl = row.querySelector(`input[name="item_rate_${itemId}"]`);
+    const serviceEl = row.querySelector(`select[name="item_service_id_${itemId}"]`);
+    const cycleEl   = row.querySelector(`select[name="item_billing_cycle_${itemId}"]`);
+
+    applyCurrencyRules();
+    syncGstHidden();
+
+    const payload = {
+      currency: (document.getElementById("currencySelect")?.value || "INR"),
+
+      item_name: nameEl ? nameEl.value : "",
+      description: descEl ? descEl.value : "",
+      qty: cleanNum(qtyEl ? qtyEl.value : "0"),
+      rate: cleanNum(rateEl ? rateEl.value : "0"),
+      discount: cleanNum(document.getElementById("discountInput")?.value || "0"),
+      estimated_closure_date: document.getElementById("closureDateInput")?.value || "",
+      service_id: serviceEl ? (serviceEl.value || "") : "",
+      billing_cycle: cycleEl ? (cycleEl.value || "ONETIME") : "ONETIME",
+
+      billing_state: (document.getElementById("billingStateInput")?.value || "").trim(),
+      billing_gstin: (document.getElementById("billingGstinInput")?.value || "").trim(),
+      is_gst_applicable: (document.getElementById("gstApplicableHidden")?.value || "1"),
+    };
+
+    setSaveState("saving");
+
+    try {
+      const res = await fetch(`/quotes/${quoteId}/items/${itemId}/autosave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!data.ok) {
+        setSaveState("error");
+        return;
+      }
+
+      const amtEl = row.querySelector(".itemAmount");
+      if (amtEl) amtEl.textContent = money(data.item_amount);
+
+      document.getElementById("subtotalText").textContent = money(data.subtotal);
+      document.getElementById("discountText").textContent = money(data.discount);
+      document.getElementById("cgstText").textContent = money(data.cgst);
+      document.getElementById("sgstText").textContent = money(data.sgst);
+      document.getElementById("igstText").textContent = money(data.igst);
+      document.getElementById("taxText").textContent = money(data.tax);
+      document.getElementById("totalText").textContent = money(data.total);
+
+      setSaveState("saved");
+    } catch (e) {
+      setSaveState("error");
+    }
+  }
+
+  function attachAutoSave() {
+    document.querySelectorAll("tbody tr[data-item-id]").forEach(row => {
+      row.querySelectorAll(".autosave").forEach(el => {
+        el.addEventListener("input", () => {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => autosaveRow(row), 450);
+        });
+        el.addEventListener("change", () => autosaveRow(row));
+      });
+    });
+
+    document.querySelectorAll(".autosave-global").forEach(el => {
+      el.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          const firstRow = document.querySelector("tbody tr[data-item-id]");
+          if (firstRow) autosaveRow(firstRow);
+        }, 450);
+      });
+      el.addEventListener("change", () => {
+        const firstRow = document.querySelector("tbody tr[data-item-id]");
+        if (firstRow) autosaveRow(firstRow);
+      });
+    });
+
+    const gstSw = document.getElementById("gstApplicableInput");
+    if (gstSw) {
+      gstSw.addEventListener("change", () => {
+        syncGstHidden();
+        const firstRow = document.querySelector("tbody tr[data-item-id]");
+        if (firstRow) autosaveRow(firstRow);
+      });
+    }
+
+    const curSel = document.getElementById("currencySelect");
+    if (curSel) {
+      curSel.addEventListener("change", () => {
+        applyCurrencyRules();
+        const firstRow = document.querySelector("tbody tr[data-item-id]");
+        if (firstRow) autosaveRow(firstRow);
+      });
+    }
+  }
+
+  // Initial formatting
+  ["subtotalText","discountText","cgstText","sgstText","igstText","taxText","totalText"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = money(el.textContent);
+  });
+
+  document.querySelectorAll(".itemAmount").forEach(el => el.textContent = money(el.textContent));
+
+  updateMultiplierHints();
+  attachAutoSave();
+  applyCurrencyRules();
+
+  document.querySelectorAll(".cycleSel").forEach(el => {
+    el.addEventListener("change", updateMultiplierHints);
+  });
+})();
+</script>
+{% endblock %}

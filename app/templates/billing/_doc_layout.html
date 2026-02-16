@@ -1,0 +1,527 @@
+{# app/templates/billing/_doc_layout.html #}
+
+{% macro money(v) -%}
+  {%- if v is none -%}0.00
+  {%- else -%}
+    {%- set s = v|string -%}
+    {%- set s = s|replace(",", "") -%}
+    {%- if s == "" -%}0.00
+    {%- else -%}{{ "{:,.2f}".format(s|float) }}
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{# --- Safe defaults (prevents "undefined" explosions) --- #}
+{% set doc_title = doc_title if doc_title is defined else "Document" %}
+{% set doc_no = doc_no if doc_no is defined else "-" %}
+{% set doc_date = doc_date if doc_date is defined else "-" %}
+{% set doc = doc if doc is defined else none %}
+{% set quote = quote if quote is defined else none %}
+{% set client = client if client is defined else none %}
+{% set branch = branch if branch is defined else none %}
+{% set company_branch = company_branch if company_branch is defined else none %}
+{% set items = items if items is defined else [] %}
+
+{% set subtotal = (doc.subtotal or 0) if doc else 0 %}
+{% set discount = (doc.discount or 0) if doc else 0 %}
+{% set taxable = (subtotal - discount) %}
+{% set cgst = (doc.cgst or 0) if doc else 0 %}
+{% set sgst = (doc.sgst or 0) if doc else 0 %}
+{% set igst = (doc.igst or 0) if doc else 0 %}
+{% set tax = (doc.tax or 0) if doc else 0 %}
+{% set total_amount = (doc.total_amount or 0) if doc else 0 %}
+{% set currency = (doc.currency or "INR") if doc else "INR" %}
+{% set is_intrastate = (cgst and (cgst|float) > 0) %}
+
+<style>
+  /* ---------- PDF/Print friendly document styling ---------- */
+  .doc-shell{
+    background:#fff;
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid rgba(2,6,23,.08);
+    box-shadow: 0 10px 24px rgba(2,6,23,.06);
+  }
+
+  .doc-page{
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  .brand-strip{
+    height: 6px;
+    border-radius: 999px;
+    overflow: hidden;
+    display:flex;
+    margin-bottom: 14px;
+  }
+  .brand-strip .orange{ width: 45%; background:#f57c00; }
+  .brand-strip .blue{ width: 55%; background:#0b5ed7; }
+
+  .doc-header{
+    display:flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 10px;
+  }
+
+  /* Bigger logo slot */
+  .doc-logo-wrap{
+    width: 150px;
+    height: 72px;
+    border: 1px solid rgba(2, 6, 23, .10);
+    border-radius: 14px;
+    background: #fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    flex: 0 0 auto;
+  }
+  .doc-logo-wrap img{
+    width: 92%;
+    height: 92%;
+    object-fit: contain;
+    display:block;
+  }
+
+  .doc-title{
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1.1;
+    margin: 0;
+    color:#0f172a;
+  }
+
+  .doc-sub{
+    margin-top: 3px;
+    color: #64748b;
+    font-size: 13px;
+  }
+
+  .doc-meta{
+    text-align:right;
+    font-size: 13px;
+    color:#0f172a;
+    min-width: 240px;
+  }
+
+  .doc-pill{
+    display:inline-block;
+    padding: 6px 12px;
+    border: 1px solid rgba(2, 6, 23, .14);
+    border-radius: 999px;
+    font-weight: 900;
+    background: #f8fafc;
+    margin-bottom: 8px;
+  }
+
+  .muted{ color:#64748b; }
+  .mono{ font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+  .pair-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .box{
+    border: 1px solid rgba(2,6,23,.10);
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .box h6{
+    margin:0 0 8px 0;
+    font-size: 13px;
+    font-weight: 800;
+    color:#0f172a;
+  }
+  .box .strong{
+    font-weight: 900;
+    color:#0f172a;
+    font-size: 16px;
+  }
+  .box .small{
+    font-size: 13px;
+    color:#334155;
+    line-height: 1.35;
+  }
+
+  /* Items table */
+  .items-table{
+    width:100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    table-layout: fixed; /* important for PDF wrapping */
+  }
+  .items-table thead th{
+    background:#f8fafc;
+    border-top: 1px solid rgba(2,6,23,.10);
+    border-bottom: 1px solid rgba(2,6,23,.10);
+    padding: 10px 10px;
+    font-size: 12px;
+    color:#0f172a;
+    text-transform: none;
+    box-sizing: border-box;
+  }
+  .items-table td{
+    border-bottom: 1px solid rgba(2,6,23,.08);
+    padding: 10px 10px;
+    vertical-align: top;
+    font-size: 13px;
+    color:#0f172a;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .items-table .num{ text-align:right; white-space: nowrap; }
+  .items-table .center{ text-align:center; }
+
+  /* Prevent long description from overshooting */
+  .items-table td.desc-cell{
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+    line-break: anywhere !important;
+    hyphens: auto;
+  }
+
+  /* Column widths via colgroup (more reliable in PDF than th widths) */
+  .w-sl{ width:4%; }
+  .w-item{ width:22%; }
+  .w-desc{ width:28%; }
+  .w-service{ width:10%; }
+  .w-billing{ width:10%; }
+  .w-qty{ width:6%; }
+  .w-rate{ width:10%; }
+  .w-amt{ width:10%; }
+
+  .totals-wrap{
+    display:flex;
+    justify-content:flex-end;
+    margin-top: 14px;
+  }
+  .totals{
+    width: 420px;
+    border: 1px solid rgba(2,6,23,.10);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .totals .row{
+    display:flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px dashed rgba(2,6,23,.12);
+    font-size: 13px;
+    margin:0;
+  }
+  .totals .row:last-child{ border-bottom: none; }
+  .totals .label{ color:#475569; }
+  .totals .value{ font-weight: 800; color:#0f172a; }
+  .totals .grand{
+    background:#f8fafc;
+    padding: 12px;
+    display:flex;
+    justify-content: space-between;
+    font-size: 16px;
+    font-weight: 900;
+  }
+
+  .bottom-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+  }
+  .bottom-grid .box{
+    min-height: 110px;
+  }
+  .legal{
+    font-size: 12px;
+    color:#334155;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+
+  .doc-footer{
+    margin-top: 16px;
+    font-size: 11px;
+    color:#64748b;
+    display:flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  /* -------- Bootstrap utility fallbacks (so PDF matches View even without bootstrap.css) -------- */
+  .d-flex{ display:flex !important; }
+  .align-items-start{ align-items:flex-start !important; }
+  .gap-3{ gap: 1rem !important; }
+
+  /* Print / PDF (WeasyPrint) */
+  @media print{
+    /* Leave space for header strip on EVERY page */
+    @page{
+      size: A4;
+      margin: 18mm 12mm 16mm 12mm;
+
+      /* WeasyPrint running header */
+      @top-center{
+        content: element(brandstrip);
+      }
+    }
+
+    body{
+      background:#fff !important;
+      margin:0 !important;
+    }
+
+    /* Make brand strip repeat via running element (no overlap on page 2+) */
+    .brand-strip{
+      position: running(brandstrip);
+      margin: 0 0 10mm 0 !important;  /* creates the gap below the header strip on every page */
+    }
+
+    .doc-shell{
+      box-shadow: none !important;
+      border: 0 !important;
+      padding: 0 !important;
+      border-radius: 0 !important;
+    }
+    .doc-page{
+      max-width: 100% !important;
+      margin: 0 !important;
+    }
+
+    /* Tighter table for print */
+    .items-table thead th{ font-size: 11px !important; padding: 8px 8px !important; }
+    .items-table td{ font-size: 12px !important; padding: 8px 8px !important; }
+
+    .box, .totals{ border-color: #d9d9d9 !important; }
+    .items-table thead th{ background: #f2f2f2 !important; }
+    .totals .grand{ background:#f2f2f2 !important; }
+    .no-print{ display:none !important; }
+  }
+
+  /* Avoid page breaks inside important blocks */
+  .box, .totals, .totals-wrap{
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Let table split across pages (don't force avoid here, or WeasyPrint may do weird widths) */
+  .items-table{
+    page-break-inside: auto;
+  }
+  .items-table tr{
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+</style>
+
+<div class="doc-page">
+  <div class="doc-shell">
+
+    <div class="brand-strip">
+      <div class="orange"></div>
+      <div class="blue"></div>
+    </div>
+
+    <div class="doc-header">
+      <div class="d-flex align-items-start gap-3">
+        <div class="doc-logo-wrap">
+          <img
+            src="{{ url_for('static', filename='img/company_logo.png', _external=True) }}"
+            alt="Company Logo">
+        </div>
+
+        <div>
+          <h1 class="doc-title">{{ doc_title }}</h1>
+          <div class="doc-sub">
+            Quote: {{ quote.quote_code if quote else '-' }}
+            • Version {{ quote.version if quote else '-' }}
+            • Opp: {{ quote.opportunity.opp_code if quote and quote.opportunity else '-' }}
+          </div>
+        </div>
+      </div>
+
+      <div class="doc-meta">
+        <div class="doc-pill">{{ doc_no }}</div>
+        <div>Date: <b>{{ doc_date }}</b></div>
+        <div>Status: <b>{{ doc.status if doc else '-' }}</b></div>
+        <div>Currency: <b>{{ currency }}</b></div>
+      </div>
+    </div>
+
+    <div class="pair-grid">
+      <div class="box">
+        <h6>From (Company)</h6>
+        <div class="strong">
+          {{ company_branch.company.name if company_branch and company_branch.company else "Company" }}
+          {% if company_branch and company_branch.branch_name %} • {{ company_branch.branch_name }}{% endif %}
+        </div>
+        <div class="small">
+          {{ company_branch.branch_address if company_branch and company_branch.branch_address else "-" }}<br>
+          {% if company_branch and company_branch.state %}State: <b>{{ company_branch.state }}</b><br>{% endif %}
+          {% if company_branch and company_branch.gst_no %}GSTIN: <b>{{ company_branch.gst_no }}</b><br>{% endif %}
+          {% if company_branch and company_branch.company and company_branch.company.pan %}PAN: <b>{{ company_branch.company.pan }}</b>{% endif %}
+        </div>
+      </div>
+
+      <div class="box">
+        <h6>Bill To (Customer)</h6>
+        <div class="strong">{{ client.company_name if client else "-" }}</div>
+        <div class="small">
+          {{ branch.address if branch and branch.address else "-" }}<br>
+          {% if branch and branch.city %}{{ branch.city }}{% endif %}
+          {% if branch and branch.pin_code %} {{ branch.pin_code }}{% endif %}<br>
+          {% if branch and branch.state %}{{ branch.state }}<br>{% endif %}
+          {% if branch and branch.country %}{{ branch.country }}<br>{% endif %}
+          {% if branch and branch.branch_location %}Branch: {{ branch.branch_location }}<br>{% endif %}
+          GSTIN: <b>{{ branch.gst if branch and branch.gst else "None" }}</b>
+        </div>
+      </div>
+    </div>
+
+    <table class="items-table">
+      <colgroup>
+        <col class="w-sl">
+        <col class="w-item">
+        <col class="w-desc">
+        <col class="w-service">
+        <col class="w-billing">
+        <col class="w-qty">
+        <col class="w-rate">
+        <col class="w-amt">
+      </colgroup>
+
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item</th>
+          <th>Description</th>
+          <th>Service</th>
+          <th>Billing</th>
+          <th class="num">Qty</th>
+          <th class="num">Rate</th>
+          <th class="num">Amount</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td class="center">{{ loop.index }}</td>
+
+          <td>
+            <div style="font-weight:800;">{{ it.item_name }}</div>
+            {% if it.service %}
+              <div class="muted" style="font-size:12px;">Service: {{ it.service.name }}</div>
+            {% endif %}
+          </td>
+
+          <td class="muted desc-cell">
+            {{ it.description if it.description else "-" }}
+          </td>
+
+          <td>
+            {{ it.service.name if it.service else "-" }}
+          </td>
+
+          <td>
+            {% set bc = (it.billing_cycle or 'ONETIME')|upper %}
+            {{ bc.replace("_"," ").title() }}
+          </td>
+
+          <td class="num mono">{{ it.qty }}</td>
+          <td class="num mono">₹ {{ money(it.rate) }}</td>
+          <td class="num mono">₹ {{ money(it.amount) }}</td>
+        </tr>
+        {% endfor %}
+
+        {% if items|length == 0 %}
+        <tr>
+          <td colspan="8" class="muted" style="text-align:center; padding:18px;">
+            No items found.
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    <div class="totals-wrap">
+      <div class="totals">
+        <div class="row">
+          <div class="label">Subtotal</div>
+          <div class="value mono">₹ {{ money(subtotal) }}</div>
+        </div>
+        <div class="row">
+          <div class="label">Discount</div>
+          <div class="value mono">₹ {{ money(discount) }}</div>
+        </div>
+        <div class="row">
+          <div class="label">Taxable Value</div>
+          <div class="value mono">₹ {{ money(taxable) }}</div>
+        </div>
+
+        {% if is_intrastate %}
+          <div class="row">
+            <div class="label">CGST</div>
+            <div class="value mono">₹ {{ money(cgst) }}</div>
+          </div>
+          <div class="row">
+            <div class="label">SGST</div>
+            <div class="value mono">₹ {{ money(sgst) }}</div>
+          </div>
+          <div class="row">
+            <div class="label">IGST</div>
+            <div class="value mono">₹ {{ money(0) }}</div>
+          </div>
+        {% else %}
+          <div class="row">
+            <div class="label">CGST</div>
+            <div class="value mono">₹ {{ money(0) }}</div>
+          </div>
+          <div class="row">
+            <div class="label">SGST</div>
+            <div class="value mono">₹ {{ money(0) }}</div>
+          </div>
+          <div class="row">
+            <div class="label">IGST</div>
+            <div class="value mono">₹ {{ money(igst) }}</div>
+          </div>
+        {% endif %}
+
+        <div class="row">
+          <div class="label">Total GST</div>
+          <div class="value mono">₹ {{ money(tax) }}</div>
+        </div>
+
+        <div class="grand">
+          <div>Grand Total</div>
+          <div class="mono">₹ {{ money(total_amount) }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-grid">
+      <div class="box">
+        <h6>Notes</h6>
+        <div class="legal">{{ doc.notes if doc and doc.notes else "-" }}</div>
+      </div>
+
+      <div class="box">
+        <h6>Terms &amp; Conditions</h6>
+        <div class="legal">{{ doc.terms if doc and doc.terms else "-" }}</div>
+      </div>
+    </div>
+
+    <div class="doc-footer">
+      <div>Generated from Crystal Nexus</div>
+      <div class="mono">{{ doc_title }} • {{ doc_no }}</div>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}{% if mode=='create' %}New Lead{% else %}Edit Lead{% endif %} • Crystal Nexus{% endblock %}
+{% block header %}Leads{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">{% if mode=='create' %}New Lead{% else %}Edit Lead{% endif %}</h4>
+    <div class="text-muted">Capture structured data. Keep it clean and searchable.</div>
+  </div>
+  <a class="btn btn-light" href="{{ url_for('leads.list_leads') }}">
+    <i class="bi bi-arrow-left me-1"></i> Back
+  </a>
+</div>
+
+<div class="card shadow-soft">
+  <div class="card-body">
+    <form method="post" class="row g-3">
+
+      <!-- BASIC INFO -->
+      <div class="col-12 col-md-6">
+        <label class="form-label">Lead Name <span class="text-danger">*</span></label>
+        <input class="form-control" name="name" required
+               value="{{ lead.name if lead else '' }}"
+               placeholder="e.g., Ramesh Kumar">
+      </div>
+
+      <div class="col-12 col-md-6">
+        <label class="form-label">Company</label>
+        <input class="form-control" name="company"
+               value="{{ lead.company if lead else '' }}"
+               placeholder="e.g., Crystal Pvt Ltd">
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">Email</label>
+        <input class="form-control" type="email" name="email"
+               value="{{ lead.email if lead else '' }}"
+               placeholder="name@company.com">
+      </div>
+
+      <!-- PHONE (Country + Number) -->
+      <div class="col-12 col-md-4">
+        <label class="form-label">Phone</label>
+        {% set pc = (lead.phone_country if lead and lead.phone_country else '+91') %}
+        <div class="input-group">
+          <select class="form-select" name="phone_country" style="max-width:110px;">
+            <option value="+91"  {% if pc=="+91" %}selected{% endif %}>+91</option>
+            <option value="+1"   {% if pc=="+1" %}selected{% endif %}>+1</option>
+            <option value="+44"  {% if pc=="+44" %}selected{% endif %}>+44</option>
+            <option value="+971" {% if pc=="+971" %}selected{% endif %}>+971</option>
+            <option value="+65"  {% if pc=="+65" %}selected{% endif %}>+65</option>
+          </select>
+          <input class="form-control" name="phone"
+                 value="{{ lead.phone if lead else '' }}"
+                 placeholder="9876543210">
+        </div>
+        <div class="text-muted small mt-1">Country code is stored separately.</div>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">Location</label>
+        <input class="form-control" name="location"
+               value="{{ lead.location if lead else '' }}"
+               placeholder="City">
+      </div>
+
+      <!-- STATUS / SOURCE / ESTIMATED CLOSURE -->
+      <div class="col-12 col-md-4">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status_id">
+          <option value="">— Select —</option>
+          {% for s in statuses %}
+            <option value="{{ s.id }}"
+              {% if lead and lead.status_id == s.id %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">Source</label>
+        <select class="form-select" name="source_id">
+          <option value="">— Select —</option>
+          {% for s in sources %}
+            <option value="{{ s.id }}"
+              {% if lead and lead.source_id == s.id %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">Estimated Closure Date</label>
+        <input type="date" class="form-control" name="estimated_closure_date"
+               value="{{ lead.estimated_closure_date.strftime('%Y-%m-%d') if lead and lead.estimated_closure_date else '' }}">
+        <div class="text-muted small mt-1">
+          Expected conversion date (forecast).
+        </div>
+      </div>
+
+      <!-- INDUSTRY / SERVICE / WEBSITE -->
+      <div class="col-12 col-md-4">
+        <label class="form-label">Industry</label>
+        <select class="form-select" name="industry_id">
+          <option value="">— Select —</option>
+          {% for i in industries %}
+            <option value="{{ i.id }}"
+              {% if lead and lead.industry_id == i.id %}selected{% endif %}>
+              {{ i.name }}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="text-muted small mt-1">
+          Missing industry? Add it from Industry Master.
+        </div>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">Service</label>
+        <select class="form-select" name="service_id">
+          <option value="">— Select —</option>
+          {% for s in services %}
+            <option value="{{ s.id }}"
+              {% if lead and lead.service_id == s.id %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="text-muted small mt-1">
+          Missing service? Add it from Lead Service Master.
+        </div>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">Website</label>
+        <input class="form-control" name="website"
+               value="{{ lead.website if lead else '' }}"
+               placeholder="https://...">
+      </div>
+
+      <!-- EXISTING CLIENT + BRANCH -->
+      <div class="col-12">
+        <div class="row g-2">
+          <div class="col-12 col-md-6">
+            <label class="form-label">Existing Client (optional)</label>
+            <select class="form-select" name="client_id" id="client_id">
+              <option value="">—</option>
+              {% for c in clients %}
+                <option value="{{ c.id }}"
+                  {% if lead and lead.client_id == c.id %}selected{% endif %}>
+                  {{ c.company_name }}
+                </option>
+              {% endfor %}
+            </select>
+            <div class="text-muted small mt-1">If selected, choose a Branch.</div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <label class="form-label">Client Branch</label>
+            <select class="form-select" name="branch_id" id="branch_id"
+                    {% if not lead or not lead.client_id %}disabled{% endif %}>
+              <option value="">—</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="col-12">
+        <label class="form-label">Notes</label>
+        <textarea class="form-control" name="notes" rows="4"
+                  placeholder="Context, requirement summary, next step...">{{ lead.notes if lead else '' }}</textarea>
+      </div>
+
+      <!-- ACTIONS -->
+      <div class="col-12 d-flex gap-2 justify-content-end">
+        <a class="btn btn-light" href="{{ url_for('leads.list_leads') }}">Cancel</a>
+        <button class="btn btn-primary">
+          <i class="bi bi-check2-circle me-1"></i>
+          {% if mode=='create' %}Create Lead{% else %}Save Changes{% endif %}
+        </button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<script>
+  const clientSel = document.getElementById("client_id");
+  const branchSel = document.getElementById("branch_id");
+  const currentBranchId = "{{ lead.branch_id if lead and lead.branch_id else '' }}";
+
+  async function loadBranches(clientId) {
+    branchSel.innerHTML = `<option value="">—</option>`;
+
+    if (!clientId) {
+      branchSel.disabled = true;
+      return;
+    }
+
+    branchSel.disabled = false;
+
+    const res = await fetch(`/leads/api/client/${clientId}/branches`);
+    const data = await res.json();
+
+    data.forEach(b => {
+      const opt = document.createElement("option");
+      opt.value = b.id;
+      opt.textContent = b.name;
+      if (String(b.id) === String(currentBranchId)) opt.selected = true;
+      branchSel.appendChild(opt);
+    });
+  }
+
+  clientSel.addEventListener("change", (e) => loadBranches(e.target.value));
+
+  if (clientSel.value) loadBranches(clientSel.value);
+</script>
+{% endblock %}

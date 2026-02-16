@@ -1,0 +1,281 @@
+{# templates/quotes/_convert_to_client_modal.html #}
+
+<div class="modal fade" id="convertToClientModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+
+      <form method="post"
+            action="{{ url_for('quotes.convert_quote_to_client', quote_id=q.id) }}"
+            onsubmit="return confirmConvert(this);">
+
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <h5 class="modal-title mb-0">
+              Convert Quote to Client
+            </h5>
+            <div class="text-muted small">
+              Quote: {{ q.quote_code }}
+            </div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body pt-2">
+
+          <!-- IMPORTANT NOTICE -->
+          <div class="alert alert-warning border-0 shadow-sm">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            This action will:
+            <ul class="mb-0 mt-1 small">
+              <li>Create a <b>Client</b></li>
+              <li>Create a <b>Branch</b></li>
+              <li>Create a <b>Primary Contact</b></li>
+              <li>Mark this Quote as <b>Selected</b></li>
+            </ul>
+          </div>
+
+          <!-- ===================== -->
+          <!-- PAYMENT SECTION -->
+          <!-- ===================== -->
+          <div class="border rounded-4 p-3 mb-4 bg-light">
+            <div class="fw-semibold mb-2">Finalization</div>
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">
+                  Final Payment Date <span class="text-danger">*</span>
+                </label>
+                <input type="date"
+                       name="final_payment_date"
+                       class="form-control"
+                       required>
+                <div class="form-text">
+                  Required before marking quote as <b>Selected</b>.
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Client Type</label>
+                <select name="client_type" class="form-select">
+                  <option value="">—</option>
+                  <option value="Domestic">Domestic</option>
+                  <option value="International">International</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===================== -->
+          <!-- COMPANY SECTION -->
+          <!-- ===================== -->
+          <div class="border rounded-4 p-3 mb-4">
+            <div class="fw-semibold mb-3">Company Details</div>
+
+            <div class="row g-3">
+
+              <div class="col-md-8">
+                <label class="form-label">
+                  Company Name <span class="text-danger">*</span>
+                </label>
+                <input name="company_name"
+                       class="form-control"
+                       required
+                       value="{{ q.opportunity.company or '' }}">
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">PAN</label>
+                <input name="pan"
+                       class="form-control"
+                       placeholder="Optional">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Industry</label>
+                <input name="company_industry"
+                       class="form-control"
+                       placeholder="Optional">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Service</label>
+                <input name="service"
+                       class="form-control"
+                       placeholder="Optional">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Website</label>
+                <input name="website"
+                       class="form-control"
+                       placeholder="Optional">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Reference</label>
+                <input name="reference"
+                       class="form-control"
+                       placeholder="Optional">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Client Category</label>
+                <select name="client_category" class="form-select">
+                  <option value="">—</option>
+                  <option value="Individual">Individual</option>
+                  <option value="Corporate">Corporate</option>
+                  <option value="LSP">LSP</option>
+                </select>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ===================== -->
+          <!-- BRANCH SECTION -->
+          <!-- ===================== -->
+          <div class="border rounded-4 p-3 mb-4">
+            <div class="fw-semibold mb-3">
+              Branch Details
+              <span class="text-muted small">(Used for GST calculation)</span>
+            </div>
+
+            <div class="row g-3">
+
+              <div class="col-md-6">
+                <label class="form-label">
+                  Branch Location <span class="text-danger">*</span>
+                </label>
+                <input name="branch_location"
+                       class="form-control"
+                       required
+                       placeholder="e.g., Head Office">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Country</label>
+                <input name="country"
+                       class="form-control"
+                       value="India">
+              </div>
+
+              <div class="col-md-12">
+                <label class="form-label">Address</label>
+                <textarea name="address"
+                          class="form-control"
+                          rows="2"></textarea>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">City</label>
+                <input name="city" class="form-control">
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">
+                  State
+                  <span class="text-muted small">(Important for GST)</span>
+                </label>
+                <input name="state" class="form-control">
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Pin Code</label>
+                <input name="pin_code" class="form-control">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">
+                  GST Number
+                  <span class="text-muted small">(Optional but recommended)</span>
+                </label>
+                <input name="gst"
+                       class="form-control"
+                       placeholder="GSTIN">
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ===================== -->
+          <!-- PRIMARY CONTACT -->
+          <!-- ===================== -->
+          <div class="border rounded-4 p-3">
+            <div class="fw-semibold mb-3">Primary Contact</div>
+
+            <div class="row g-3">
+
+              <div class="col-md-6">
+                <label class="form-label">
+                  Contact Name <span class="text-danger">*</span>
+                </label>
+                <input name="contact_name"
+                       class="form-control"
+                       required
+                       value="{{ q.opportunity.contact_name or '' }}">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Designation</label>
+                <input name="contact_designation"
+                       class="form-control">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Phone</label>
+                <input name="contact_phone"
+                       class="form-control"
+                       value="{{ q.opportunity.contact_phone or '' }}">
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Email</label>
+                <input name="contact_email"
+                       type="email"
+                       class="form-control"
+                       value="{{ q.opportunity.contact_email or '' }}">
+              </div>
+
+              <div class="col-md-12">
+                <label class="form-label">Remarks</label>
+                <textarea name="remarks"
+                          class="form-control"
+                          rows="2"></textarea>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer border-0">
+          <button type="button"
+                  class="btn btn-outline-secondary"
+                  data-bs-dismiss="modal">
+            Cancel
+          </button>
+
+          <button type="submit"
+                  class="btn btn-warning"
+                  id="convertBtn">
+            <i class="bi bi-check2-circle me-1"></i>
+            Convert & Mark Selected
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function confirmConvert(form) {
+  const btn = document.getElementById('convertBtn');
+  if (!confirm("Are you sure you want to convert this quote into a Client and mark it as Selected?")) {
+    return false;
+  }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+  return true;
+}
+</script>

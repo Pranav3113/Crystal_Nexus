@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Margin Settings{% endblock %}
+{% block header %}Margin Settings{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Margin Threshold</div>
+        <div class="text-muted small mb-3">
+          Projects with margin % below this value will be flagged in reports.
+        </div>
+
+        <form method="post" class="row g-2 align-items-end">
+          <div class="col-12 col-md-6">
+            <label class="form-label">Threshold (%)</label>
+            <input type="number" step="0.01" min="0" max="100"
+                   class="form-control" name="threshold_percent"
+                   value="{{ settings.threshold_percent }}">
+          </div>
+
+          <div class="col-12 col-md-6 d-grid">
+            <button class="btn btn-dark">
+              <i class="bi bi-save2 me-1"></i>Save
+            </button>
+          </div>
+        </form>
+
+        <hr>
+        <div class="text-muted small">
+          Last updated:
+          <span class="fw-semibold">
+            {{ settings.updated_at.strftime('%d-%b-%Y %H:%M') if settings.updated_at else '—' }}
+          </span>
+          {% if settings.updated_by %}
+            by <span class="fw-semibold">{{ settings.updated_by.name }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

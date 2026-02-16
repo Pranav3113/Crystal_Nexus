@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Designation Master{% endblock %}
+{% block header %}Designation Master{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Add Designation</div>
+        <form method="post" class="vstack gap-2">
+          <input type="hidden" name="action" value="create">
+          <div>
+            <label class="form-label">Name</label>
+            <input class="form-control" name="name" required>
+          </div>
+          <div>
+            <label class="form-label">Code (optional)</label>
+            <input class="form-control" name="code">
+          </div>
+          <div class="d-flex justify-content-end">
+            <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Designations</div>
+
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Code</th>
+                <th>Source</th>
+                <th style="width:220px;">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in items %}
+              <tr>
+                <td class="fw-semibold">{{ d.name }}</td>
+                <td class="text-muted">{{ d.code or "—" }}</td>
+                <td><span class="badge text-bg-light text-dark">{{ d.source }}</span></td>
+                <td>
+                  <form method="post" class="d-flex gap-2">
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" name="id" value="{{ d.id }}">
+                    <input class="form-control form-control-sm" name="name" value="{{ d.name }}" {% if d.source!='LOCAL' %}readonly{% endif %}>
+                    <input class="form-control form-control-sm" name="code" value="{{ d.code or '' }}" {% if d.source!='LOCAL' %}readonly{% endif %}>
+                    <select class="form-select form-select-sm" name="is_active">
+                      <option value="1" {% if d.is_active %}selected{% endif %}>Active</option>
+                      <option value="0" {% if not d.is_active %}selected{% endif %}>Inactive</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-dark">Save</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+              {% if items|length == 0 %}
+              <tr><td colspan="4" class="text-center text-muted p-5">No designations yet</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="text-muted small mt-2">
+          Tip: HRMS/SSO designations should be marked as <b>source=HRMS</b> and kept read-only.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

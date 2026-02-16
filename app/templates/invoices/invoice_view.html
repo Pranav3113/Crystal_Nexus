@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Invoice{% endblock %}
+{% block header %}Invoice{% endblock %}
+{% block content %}
+
+<div class="no-print d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <div class="text-muted small">Invoice</div>
+    <h4 class="mb-0">{{ invoice.invoice_no }}</h4>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('proforma.view_pi', pi_id=invoice.pi_id) }}">
+      Back to PI
+    </a>
+
+    <a class="btn btn-outline-primary"
+       href="{{ url_for('invoices.download_invoice', invoice_id=invoice.id) }}">
+      <i class="bi bi-download me-1"></i>Download PDF
+    </a>
+
+    <a class="btn btn-outline-success"
+       href="{{ url_for('payments.invoice_payments', invoice_id=invoice.id) }}">
+      <i class="bi bi-cash-coin me-1"></i>Payments
+    </a>
+  </div>
+</div>
+
+{# Reuse the same layout partial #}
+{% set doc_title = "Invoice" %}
+{% set doc_no = invoice.invoice_no %}
+{% set doc_date = invoice.invoice_date %}
+{% set doc = invoice %}
+{% set quote = invoice.quote %}
+{% set client = invoice.client %}
+{% set branch = invoice.client_branch %}
+{% set company_branch = invoice.company_branch %}
+
+{% set items = quote.items.order_by(
+  quote.items.column_descriptions[0]['entity'].sort_order.asc(),
+  quote.items.column_descriptions[0]['entity'].id.asc()
+).all() %}
+
+{% include "billing/_doc_layout.html" with context %}
+
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Follow-ups • Crystal Nexus{% endblock %}
+{% block header %}Follow-ups{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Upcoming Follow-ups</h4>
+    <div class="text-muted">Your next actions for the next {{ days }} days.</div>
+  </div>
+  <form method="get" class="d-flex gap-2">
+    <select class="form-select" name="days" style="width:180px;">
+      {% for d in [1,3,7,14,30] %}
+        <option value="{{d}}" {% if days==d %}selected{% endif %}>Next {{d}} days</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-dark"><i class="bi bi-filter me-1"></i>Apply</button>
+  </form>
+</div>
+
+<div class="card shadow-soft">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Follow-up Time</th>
+          <th>Lead</th>
+          <th>Activity</th>
+          <th>Outcome</th>
+          <th class="text-end">Open</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in items %}
+        <tr>
+          <td class="fw-semibold">{{ a.next_follow_up_at.strftime("%d %b %Y, %I:%M %p") }}</td>
+          <td>
+            <div class="fw-semibold">{{ a.lead.name }}</div>
+            <div class="text-muted small">{{ a.lead.company or '—' }} • {{ a.lead.lead_code }}</div>
+          </td>
+          <td>
+            <i class="bi bi-{{ a.activity_type.icon if a.activity_type else 'activity' }} me-1"></i>
+            {{ a.activity_type.name if a.activity_type else 'Activity' }}
+            <div class="text-muted small">{{ a.subject or '—' }}</div>
+          </td>
+          <td>{{ a.outcome or '—' }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('leads.view_lead', lead_id=a.lead_id) }}">
+              <i class="bi bi-box-arrow-up-right me-1"></i>View Lead
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+
+        {% if items|length == 0 %}
+        <tr><td colspan="5" class="text-center text-muted p-5">No follow-ups scheduled 🎉</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,427 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard | Crystal Nexus{% endblock %}
+{% block header %}Admin Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- =======================
+     HEADER / ACTIONS
+======================= -->
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div class="text-muted">
+    Welcome, <span class="fw-semibold">{{ current_user.name }}</span>
+    {% if team_count and team_count > 0 %}
+      • You have <span class="fw-semibold">{{ team_count }}</span> report(s)
+    {% endif %}
+  </div>
+
+  <div class="d-flex gap-2">
+    {% if can_team_dashboard %}
+      <a class="btn btn-outline-primary" href="{{ url_for('admin.team_dashboard') }}">
+        <i class="bi bi-people me-1"></i> Team Dashboard
+      </a>
+    {% endif %}
+    {% if can_team_structure %}
+      <a class="btn btn-outline-secondary" href="{{ url_for('admin.team_structure') }}">
+        <i class="bi bi-diagram-3 me-1"></i> Team Structure
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- =======================
+     ACTION / ALERT ROW
+======================= -->
+<div class="row g-3 mb-3">
+
+  <!-- Followups -->
+  <div class="col-md-4">
+    <div class="card shadow-soft h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="fw-semibold">
+            <i class="bi bi-bell me-2"></i> Follow-ups
+          </div>
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('leads.followups') }}">
+            Open
+          </a>
+        </div>
+
+        <div class="mt-2">
+          <div class="fs-4 fw-bold">{{ my.kpi.followups.total }}</div>
+          <div class="text-muted small">
+            Due Today:
+            <span class="fw-semibold {% if my.kpi.followups.due_today > 0 %}text-danger{% endif %}">
+              {{ my.kpi.followups.due_today }}
+            </span>
+            • Overdue:
+            <span class="fw-semibold {% if my.kpi.followups.overdue > 0 %}text-danger{% endif %}">
+              {{ my.kpi.followups.overdue }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quote Approvals -->
+  {% if current_user.has_perm('quotes.approve') %}
+  <div class="col-md-4">
+    <div class="card shadow-soft h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="fw-semibold">
+            <i class="bi bi-check2-square me-2"></i> Quote Approvals
+          </div>
+          <a class="btn btn-sm btn-outline-dark" href="{{ url_for('quotes.approvals_inbox') }}">
+            Inbox
+          </a>
+        </div>
+
+        <div class="mt-2">
+          <div class="fs-4 fw-bold {% if quote_approvals.count > 0 %}text-warning{% endif %}">
+            {{ quote_approvals.count }}
+          </div>
+          <div class="text-muted small">Waiting for your action</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Payment Queue -->
+  {% if current_user.has_perm('payments.verify') or current_user.has_perm('payments.admin') %}
+  <div class="col-md-4">
+    <div class="card shadow-soft h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="fw-semibold">
+            <i class="bi bi-cash-coin me-2"></i> Payment Queue
+          </div>
+          <a class="btn btn-sm btn-outline-dark" href="{{ url_for('payments.finance_payment_queue') }}">
+            Open
+          </a>
+        </div>
+
+        <div class="mt-2">
+          <div class="fs-4 fw-bold {% if payment_queue.count > 0 %}text-warning{% endif %}">
+            {{ payment_queue.count }}
+          </div>
+          <div class="text-muted small">Pending verification</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+
+<!-- =======================
+     MY SUMMARY
+======================= -->
+<div class="card shadow-soft mb-3">
+  <div class="card-header bg-white d-flex justify-content-between">
+    <div class="fw-semibold">
+      <i class="bi bi-person-circle me-2"></i> My Summary
+    </div>
+    <span class="badge text-bg-light">My Scope</span>
+  </div>
+
+  <div class="card-body">
+
+    <!-- KPI CARDS -->
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="card shadow-soft p-3 h-100">
+          <div class="text-muted small">Leads</div>
+          <div class="fs-4 fw-bold">{{ my.kpi.lead_total }}</div>
+          <div class="text-muted small">Owned by me</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card shadow-soft p-3 h-100">
+          <div class="text-muted small">Clients</div>
+          <div class="fs-4 fw-bold">{{ my.kpi.clients }}</div>
+          <div class="text-muted small">From my leads</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card shadow-soft p-3 h-100">
+          <div class="text-muted small">Payments (Verified)</div>
+          <div class="fs-4 fw-bold">{{ my.kpi.payments.get('Verified', 0) }}</div>
+          <div class="text-muted small">Pending {{ my.kpi.payments.get('Pending', 0) }}</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card shadow-soft p-3 h-100">
+          <div class="text-muted small">Outstanding</div>
+          <div class="fs-4 fw-bold">{{ my.kpi.outstanding }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEW: Opportunity urgency KPIs -->
+    <hr class="my-3">
+
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="card shadow-soft p-3 h-100">
+          <div class="text-muted small">Opportunities</div>
+          <div class="fs-4 fw-bold">{{ my.kpi.opp_total }}</div>
+          <div class="text-muted small">Owned by me</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card shadow-soft p-3 h-100">
+          <div class="text-muted small">Pipeline Value</div>
+          <div class="fs-4 fw-bold">{{ my.kpi.opp_value }}</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card shadow-soft p-3 h-100">
+          <div class="text-muted small">Closing This Week</div>
+          <div class="fs-4 fw-bold {% if my.kpi.opp_closure.closing_this_week > 0 %}text-warning{% endif %}">
+            {{ my.kpi.opp_closure.closing_this_week }}
+          </div>
+          <div class="text-muted small">Next 7 days</div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card shadow-soft p-3 h-100">
+          <div class="text-muted small">Overdue Closures</div>
+          <div class="fs-4 fw-bold {% if my.kpi.opp_closure.overdue > 0 %}text-danger{% endif %}">
+            {{ my.kpi.opp_closure.overdue }}
+          </div>
+          <div class="text-muted small">Past close date</div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="row g-3">
+      <!-- FOLLOWUPS TABLE -->
+      <div class="col-lg-6">
+        <div class="card shadow-soft h-100">
+          <div class="card-header bg-white fw-semibold d-flex justify-content-between">
+            <div><i class="bi bi-calendar-check me-2"></i> Follow-ups Lined Up</div>
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('leads.followups') }}">View All</a>
+          </div>
+
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Lead</th>
+                    <th>Type</th>
+                    <th>Next Follow-up</th>
+                    <th class="text-end">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in my.kpi.followups["items"] %}
+                  <tr class="{% if row.is_today %}table-warning{% elif row.is_overdue %}table-danger{% endif %}">
+                    <td class="fw-semibold">{{ row.lead.name }}</td>
+                    <td>{{ row.atype.name if row.atype else '-' }}</td>
+                    <td>{{ row.activity.next_follow_up_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td class="text-end">
+                      {% if row.is_today %}
+                        <span class="badge text-bg-warning">Due Today</span>
+                      {% elif row.is_overdue %}
+                        <span class="badge text-bg-danger">Overdue</span>
+                      {% else %}
+                        <span class="badge text-bg-secondary">Upcoming</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="4" class="text-muted">No follow-ups.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RECENT OPPORTUNITIES -->
+      <div class="col-lg-6">
+        <div class="card shadow-soft h-100">
+          <div class="card-header bg-white fw-semibold d-flex justify-content-between">
+            <div><i class="bi bi-briefcase me-2"></i> Recent Opportunities</div>
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('pipeline.board') }}">Open Pipeline</a>
+          </div>
+
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Stage</th>
+                    <th class="text-end">Value</th>
+                    <th class="text-end">Close</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for o in my.recent.opportunities %}
+                  {% set close_overdue = (o.expected_close_date and o.expected_close_date < date.today()) %}
+                  <tr class="{% if close_overdue %}table-danger{% endif %}">
+                    <td class="fw-semibold">
+                      {{ o.title }}
+                      <div class="text-muted small">
+                        {{ o.company or (o.client.company_name if o.client else '') }}
+                      </div>
+                    </td>
+                    <td>
+                      <span class="badge text-bg-{{ o.stage.color if o.stage and o.stage.color else 'secondary' }}">
+                        {{ o.stage.name if o.stage else '-' }}
+                      </span>
+                    </td>
+                    <td class="text-end">{{ o.expected_value or 0 }}</td>
+                    <td class="text-end">
+                      {% if o.expected_close_date %}
+                        {{ o.expected_close_date.strftime('%Y-%m-%d') }}
+                        {% if close_overdue %}
+                          <div class="text-danger small">Overdue</div>
+                        {% endif %}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% else %}
+                  <tr><td colspan="4" class="text-muted">No recent opportunities.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="mt-2 text-muted small">
+              Note: this list is scoped by <code>Opportunity.owner_id</code>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEW: Opportunities Closing Soon -->
+    <div class="card shadow-soft mt-3">
+      <div class="card-header bg-white fw-semibold d-flex justify-content-between">
+        <div><i class="bi bi-alarm me-2"></i> Opportunities Closing Soon (Next 7 days)</div>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('pipeline.board') }}">View Pipeline</a>
+      </div>
+
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Opportunity</th>
+                <th>Stage</th>
+                <th class="text-end">Value</th>
+                <th class="text-end">Close Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for o in my.recent.closing_opps %}
+              {% set overdue = (o.expected_close_date and o.expected_close_date < date.today()) %}
+              <tr class="{% if overdue %}table-danger{% endif %}">
+                <td class="fw-semibold">
+                  {{ o.title }}
+                  <div class="text-muted small">
+                    {{ o.company or (o.client.company_name if o.client else '') }}
+                  </div>
+                </td>
+                <td>
+                  <span class="badge text-bg-{{ o.stage.color if o.stage and o.stage.color else 'secondary' }}">
+                    {{ o.stage.name if o.stage else '-' }}
+                  </span>
+                </td>
+                <td class="text-end">{{ o.expected_value or 0 }}</td>
+                <td class="text-end">
+                  {{ o.expected_close_date.strftime('%Y-%m-%d') }}
+                  {% if overdue %}
+                    <div class="text-danger small">Overdue</div>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-muted">No upcoming closures.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- =======================
+     TEAM SNAPSHOT
+======================= -->
+<div class="card shadow-soft">
+  <div class="card-header bg-white d-flex justify-content-between">
+    <div class="fw-semibold">
+      <i class="bi bi-people me-2"></i> Team Snapshot
+    </div>
+    <span class="badge text-bg-light">{{ team_count }} report(s)</span>
+  </div>
+
+  <div class="card-body">
+    {% if team %}
+      <div class="row g-3">
+        <div class="col-md-3">
+          <div class="card shadow-soft p-3 h-100">
+            <div class="text-muted small">Team Leads</div>
+            <div class="fs-4 fw-bold">{{ team.kpi.lead_total }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card shadow-soft p-3 h-100">
+            <div class="text-muted small">Team Clients</div>
+            <div class="fs-4 fw-bold">{{ team.kpi.clients }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card shadow-soft p-3 h-100">
+            <div class="text-muted small">Team Opportunities</div>
+            <div class="fs-4 fw-bold">{{ team.kpi.opp_total }}</div>
+            <div class="text-muted small">Pipeline {{ team.kpi.opp_value }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card shadow-soft p-3 h-100">
+            <div class="text-muted small">Team Overdue Closures</div>
+            <div class="fs-4 fw-bold {% if team.kpi.opp_closure.overdue > 0 %}text-danger{% endif %}">
+              {{ team.kpi.opp_closure.overdue }}
+            </div>
+            <div class="text-muted small">Closing this week: {{ team.kpi.opp_closure.closing_this_week }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3 d-flex gap-2">
+        <a class="btn btn-primary" href="{{ url_for('admin.team_dashboard') }}">
+          <i class="bi bi-people me-1"></i> View Team Dashboard
+        </a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('admin.team_structure') }}">
+          <i class="bi bi-diagram-3 me-1"></i> View Team Structure
+        </a>
+      </div>
+    {% else %}
+      <div class="text-muted">No team members under you yet.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

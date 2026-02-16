@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .btn-orange { background:#f57c00; border-color:#f57c00; color:#fff; }
+  .btn-orange:hover { filter: brightness(0.95); color:#fff; }
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+  .muted { color:#6c757d; }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Menu Management</h4>
+    <div class="muted">Create Menus + SubMenus and bind them to permission codes.</div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- MENUS -->
+  <div class="col-lg-5">
+    <div class="card card-soft">
+      <div class="card-body">
+        <h5 class="mb-3">Create Menu</h5>
+        <form method="post" class="row g-2">
+          <input type="hidden" name="action" value="menu_create">
+          <div class="col-12">
+            <label class="form-label">Title</label>
+            <input class="form-control" name="title" required>
+          </div>
+          <div class="col-6">
+            <label class="form-label">Icon (bi-*)</label>
+            <input class="form-control" name="icon" placeholder="e.g. speedometer2">
+          </div>
+          <div class="col-3">
+            <label class="form-label">Order</label>
+            <input class="form-control" name="sort_order" type="number" value="1">
+          </div>
+          <div class="col-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="is_active" checked>
+              <label class="form-check-label">Active</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-orange w-100">Create Menu</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card card-soft mt-3">
+      <div class="card-body">
+        <h5 class="mb-3">Menus</h5>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Icon</th>
+                <th>Order</th>
+                <th>Active</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in menus %}
+              <tr>
+                <form method="post">
+                  <input type="hidden" name="action" value="menu_update">
+                  <input type="hidden" name="menu_id" value="{{ m.id }}">
+                  <td><input class="form-control form-control-sm" name="title" value="{{ m.title }}"></td>
+                  <td><input class="form-control form-control-sm" name="icon" value="{{ m.icon or '' }}"></td>
+                  <td style="width:90px;"><input class="form-control form-control-sm" type="number" name="sort_order" value="{{ m.sort_order }}"></td>
+                  <td class="text-center">
+                    <input class="form-check-input" type="checkbox" name="is_active" {% if m.is_active %}checked{% endif %}>
+                  </td>
+                  <td class="text-end">
+                    <button class="btn btn-sm btn-primary">Save</button>
+                </form>
+
+                <form method="post" class="d-inline" onsubmit="return confirm('Delete menu? This will delete its submenus too.');">
+                  <input type="hidden" name="action" value="menu_delete">
+                  <input type="hidden" name="menu_id" value="{{ m.id }}">
+                  <button class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+                  </td>
+              </tr>
+              {% endfor %}
+              {% if menus|length == 0 %}
+                <tr><td colspan="5" class="text-center muted py-3">No menus yet</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- SUBMENUS -->
+  <div class="col-lg-7">
+    <div class="card card-soft">
+      <div class="card-body">
+        <h5 class="mb-3">Create SubMenu</h5>
+
+        <form method="post" class="row g-2">
+          <input type="hidden" name="action" value="submenu_create">
+
+          <div class="col-6">
+            <label class="form-label">Menu</label>
+            <select class="form-select" name="menu_id" required>
+              {% for m in menus %}
+                <option value="{{ m.id }}">{{ m.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">Permission (optional)</label>
+            <select class="form-select" name="permission_code">
+              <option value="">-- visible to all logged-in --</option>
+              {% for p in perms %}
+                <option value="{{ p.code }}">{{ p.code }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">Title</label>
+            <input class="form-control" name="title" required>
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">Icon (optional)</label>
+            <input class="form-control" name="icon" placeholder="e.g. list-check">
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">Endpoint (preferred)</label>
+            <input class="form-control" name="endpoint" placeholder="e.g. leads.list_leads">
+          </div>
+
+          <div class="col-6">
+            <label class="form-label">URL (fallback)</label>
+            <input class="form-control" name="url" placeholder="/leads">
+          </div>
+
+          <div class="col-3">
+            <label class="form-label">Order</label>
+            <input class="form-control" name="sort_order" type="number" value="1">
+          </div>
+
+          <div class="col-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="is_active" checked>
+              <label class="form-check-label">Active</label>
+            </div>
+          </div>
+
+          <div class="col-6 d-flex align-items-end">
+            <button class="btn btn-orange w-100">Create SubMenu</button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+    <div class="card card-soft mt-3">
+      <div class="card-body">
+        <h5 class="mb-3">SubMenus</h5>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr>
+                <th>Menu</th>
+                <th>Title</th>
+                <th>Endpoint / URL</th>
+                <th>Perm</th>
+                <th>Order</th>
+                <th>Active</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in submenus %}
+              <tr>
+                <form method="post">
+                  <input type="hidden" name="action" value="submenu_update">
+                  <input type="hidden" name="submenu_id" value="{{ s.id }}">
+
+                  <td style="min-width:170px;">
+                    <select class="form-select form-select-sm" name="menu_id">
+                      {% for m in menus %}
+                        <option value="{{ m.id }}" {% if m.id == s.menu_id %}selected{% endif %}>{{ m.title }}</option>
+                      {% endfor %}
+                    </select>
+                  </td>
+
+                  <td><input class="form-control form-control-sm" name="title" value="{{ s.title }}"></td>
+
+                  <td style="min-width:260px;">
+                    <input class="form-control form-control-sm mb-1" name="endpoint" value="{{ s.endpoint or '' }}" placeholder="endpoint">
+                    <input class="form-control form-control-sm" name="url" value="{{ s.url or '' }}" placeholder="url">
+                  </td>
+
+                  <td style="min-width:220px;">
+                    <select class="form-select form-select-sm" name="permission_code">
+                      <option value="" {% if not s.permission_code %}selected{% endif %}>-- none --</option>
+                      {% for p in perms %}
+                        <option value="{{ p.code }}" {% if p.code == s.permission_code %}selected{% endif %}>{{ p.code }}</option>
+                      {% endfor %}
+                    </select>
+                  </td>
+
+                  <td style="width:80px;"><input class="form-control form-control-sm" type="number" name="sort_order" value="{{ s.sort_order }}"></td>
+
+                  <td class="text-center">
+                    <input class="form-check-input" type="checkbox" name="is_active" {% if s.is_active %}checked{% endif %}>
+                  </td>
+
+                  <td class="text-end" style="min-width:140px;">
+                    <button class="btn btn-sm btn-primary">Save</button>
+                </form>
+
+                <form method="post" class="d-inline" onsubmit="return confirm('Delete submenu?');">
+                  <input type="hidden" name="action" value="submenu_delete">
+                  <input type="hidden" name="submenu_id" value="{{ s.id }}">
+                  <button class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+                  </td>
+              </tr>
+              {% endfor %}
+              {% if submenus|length == 0 %}
+                <tr><td colspan="7" class="text-center muted py-3">No submenus yet</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

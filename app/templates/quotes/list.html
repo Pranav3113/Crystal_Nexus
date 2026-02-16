@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Quotes • Crystal Nexus{% endblock %}
+{% block header %}Quotes{% endblock %}
+
+{% block content %}
+<style>
+  .shadow-soft { box-shadow: 0 6px 18px rgba(0,0,0,.05); border: 1px solid rgba(0,0,0,.06); border-radius: 14px; }
+  .mono { font-variant-numeric: tabular-nums; }
+</style>
+
+{% macro money(v) -%}
+  {%- if v is none -%}0.00
+  {%- else -%}
+    {%- set s = v|string -%}
+    {%- set s = s|replace(",", "") -%}
+    {%- if s == "" -%}0.00{%- else -%}{{ "%.2f"|format(s|float) }}{%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+  <div>
+    <h4 class="mb-0">Quote List</h4>
+    <div class="text-muted">Showing latest version per opportunity.</div>
+  </div>
+</div>
+
+<!-- ================= FILTER CARD ================= -->
+<div class="card shadow-soft mb-3">
+  <div class="card-body">
+    <form class="row g-2 align-items-end" method="get">
+      <div class="col-12 col-md-6">
+        <label class="form-label">Search</label>
+        <input class="form-control"
+               name="q"
+               value="{{ qtext }}"
+               placeholder="Quote code, opp code, title, company...">
+      </div>
+
+      <div class="col-12 col-md-3">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status_id">
+          <option value="">All</option>
+          {% for s in statuses %}
+            <option value="{{ s.id }}"
+              {% if status_id|string == s.id|string %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-12 col-md-3 d-flex gap-2">
+        <button class="btn btn-dark w-100">
+          <i class="bi bi-search me-1"></i>Apply
+        </button>
+        <a class="btn btn-light"
+           href="{{ url_for('quotes.list_quotes') }}">
+           Reset
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= TABLE ================= -->
+<div class="card shadow-soft">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mb-0 align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Quote</th>
+            <th>Opportunity</th>
+            <th>Status</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">Updated</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for q in pagination.items %}
+          {% set status_name = q.status.name if q.status else "" %}
+          {% set editable = status_name in ("Draft","Rejected") %}
+
+          <tr>
+            <!-- Quote -->
+            <td>
+              <div class="fw-semibold">{{ q.quote_code }}</div>
+              <div class="text-muted small">
+                Version {{ q.version }}
+                {% if not editable %}
+                  <i class="bi bi-lock ms-1 text-muted" title="Locked"></i>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Opportunity -->
+            <td>
+              {% if q.opportunity %}
+                <div class="fw-semibold">
+                  {{ q.opportunity.opp_code }} • {{ q.opportunity.title }}
+                </div>
+                <div class="text-muted small">
+                  {{ q.opportunity.company or "—" }}
+                </div>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Status -->
+            <td>
+              {% if status_name == "Approved" %}
+                <span class="badge text-bg-success">{{ status_name }}</span>
+              {% elif status_name == "Pending Approval" %}
+                <span class="badge text-bg-warning">{{ status_name }}</span>
+              {% elif status_name == "Rejected" %}
+                <span class="badge text-bg-danger">{{ status_name }}</span>
+              {% elif status_name == "Sent" %}
+                <span class="badge text-bg-dark">{{ status_name }}</span>
+              {% elif status_name == "Selected" %}
+                <span class="badge text-bg-primary">{{ status_name }}</span>
+              {% elif status_name == "Draft" %}
+                <span class="badge text-bg-secondary">{{ status_name }}</span>
+              {% else %}
+                <span class="badge text-bg-light border">{{ status_name or "—" }}</span>
+              {% endif %}
+            </td>
+
+            <!-- Total -->
+            <td class="text-end fw-semibold mono">
+              {{ money(q.total_amount or q.total) }}
+            </td>
+
+            <!-- Updated -->
+            <td class="text-end text-muted small">
+              {{ q.updated_at.strftime("%d %b %Y, %I:%M %p") if q.updated_at else "—" }}
+            </td>
+
+            <!-- Actions -->
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-dark"
+                 href="{{ url_for('quotes.view_quote', quote_id=q.id) }}"
+                 title="View">
+                <i class="bi bi-eye"></i>
+              </a>
+
+              {% if editable %}
+              <a class="btn btn-sm btn-outline-primary"
+                 href="{{ url_for('quotes.edit_quote', quote_id=q.id) }}"
+                 title="Edit">
+                <i class="bi bi-pencil-square"></i>
+              </a>
+              {% endif %}
+
+              {% if q.opportunity %}
+              <a class="btn btn-sm btn-outline-secondary"
+                 href="{{ url_for('quotes.versions_for_opportunity', opp_id=q.opportunity_id) }}"
+                 title="All Versions">
+                <i class="bi bi-clock-history"></i>
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+
+          {% if pagination.total == 0 %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-5">
+              No quotes found.
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= PAGINATION ================= -->
+  {% if pagination.pages > 1 %}
+  <div class="card-footer bg-white d-flex align-items-center justify-content-between">
+    <div class="small text-muted">
+      Page {{ pagination.page }} of {{ pagination.pages }} • Total {{ pagination.total }}
+    </div>
+
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        {% if pagination.has_prev %}
+          <li class="page-item">
+            <a class="page-link"
+               href="{{ url_for('quotes.list_quotes', page=pagination.prev_num, q=qtext, status_id=status_id) }}">
+              Prev
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Prev</span></li>
+        {% endif %}
+
+        <li class="page-item disabled">
+          <span class="page-link">{{ pagination.page }}</span>
+        </li>
+
+        {% if pagination.has_next %}
+          <li class="page-item">
+            <a class="page-link"
+               href="{{ url_for('quotes.list_quotes', page=pagination.next_num, q=qtext, status_id=status_id) }}">
+              Next
+            </a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

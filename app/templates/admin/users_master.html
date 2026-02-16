@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% block title %}User Master{% endblock %}
+{% block header %}User Master{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Create User</div>
+
+        <form method="post" class="vstack gap-2">
+          <input type="hidden" name="action" value="create">
+
+          <div>
+            <label class="form-label">Provisioning</label>
+            <select class="form-select" name="auth_provider" id="authProvider">
+              <option value="LOCAL" selected>Local (Create in Crystal Nexus)</option>
+              <option value="HRMS">External (HRMS Sync)</option>
+              <option value="SSO">External (SSO)</option>
+            </select>
+            <div class="text-muted small mt-1">External users won’t have a password here.</div>
+          </div>
+
+          <div>
+            <label class="form-label">Name</label>
+            <input class="form-control" name="name" required>
+          </div>
+
+          <div>
+            <label class="form-label">Email</label>
+            <input class="form-control" name="email" required>
+          </div>
+
+          <div id="passwordWrap">
+            <label class="form-label">Password (LOCAL)</label>
+            <input class="form-control" name="password" type="password">
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Role</label>
+              <select class="form-select" name="role_id">
+                <option value="">—</option>
+                {% for r in roles %}
+                  <option value="{{ r.id }}">{{ r.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Employee Code</label>
+              <input class="form-control" name="employee_code">
+            </div>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Designation</label>
+              <select class="form-select" name="designation_id">
+                <option value="">—</option>
+                {% for d in designations %}
+                  <option value="{{ d.id }}">{{ d.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Department</label>
+              <input class="form-control" name="department">
+            </div>
+          </div>
+
+          <!-- ✅ NEW: Team Role for reporting (BD/AM) -->
+          <div>
+            <label class="form-label">Team Role (for reporting)</label>
+            <select class="form-select" name="team_role">
+              <option value="">—</option>
+              <option value="BD">BD</option>
+              <option value="AM">AM</option>
+            </select>
+            <div class="text-muted small mt-1">Used for productivity benchmarks (BD=15× CTC, AM=25× CTC).</div>
+          </div>
+
+          <!-- ✅ NEW: Monthly CTC -->
+          <div>
+            <label class="form-label">Monthly CTC</label>
+            <input class="form-control" type="number" step="0.01" min="0" name="monthly_ctc" placeholder="0.00">
+            <div class="text-muted small mt-1">Used in productivity reporting: Revenue ÷ Monthly CTC.</div>
+          </div>
+
+          <div>
+            <label class="form-label">Reporting Manager</label>
+            <select class="form-select" name="reporting_manager_user_id">
+              <option value="">—</option>
+              {% for m in managers %}
+                <option value="{{ m.id }}">{{ m.name }} ({{ m.email }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- ✅ Company Branch -->
+          <div>
+            <label class="form-label">Company Branch</label>
+            <select class="form-select" name="company_branch_id">
+              <option value="">—</option>
+              {% for b in branches %}
+                <option value="{{ b.id }}">{{ b.company.name }} — {{ b.branch_name }}</option>
+              {% endfor %}
+            </select>
+            <div class="text-muted small mt-1">Used for tagging user to branch for future filtering/reporting.</div>
+          </div>
+
+          <div class="d-flex justify-content-end">
+            <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Users</div>
+
+        <form method="get" class="row g-2 mb-3">
+          <div class="col-12 col-md-5">
+            <input class="form-control" name="q" placeholder="Search name/email" value="{{ q }}">
+          </div>
+          <div class="col-6 col-md-3">
+            <select class="form-select" name="provider">
+              <option value="">All Providers</option>
+              <option value="LOCAL" {% if provider=='LOCAL' %}selected{% endif %}>LOCAL</option>
+              <option value="HRMS" {% if provider=='HRMS' %}selected{% endif %}>HRMS</option>
+              <option value="SSO" {% if provider=='SSO' %}selected{% endif %}>SSO</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <select class="form-select" name="role">
+              <option value="">All Roles</option>
+              {% for r in roles %}
+                <option value="{{ r.id }}" {% if role_filter==r.id|string %}selected{% endif %}>{{ r.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-1 d-grid">
+            <button class="btn btn-outline-dark"><i class="bi bi-funnel"></i></button>
+          </div>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>User</th>
+                <th>Provider</th>
+                <th>Role</th>
+                <th>Emp</th>
+                <th>CTC</th>
+                <th>Branch</th>
+                <th style="width:420px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in users %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ u.name }}</div>
+                  <div class="text-muted small">{{ u.email }}</div>
+                </td>
+
+                <td>
+                  <span class="badge text-bg-light text-dark">{{ u.auth_provider }}</span>
+                </td>
+
+                <td>{{ u.role.name if u.role else "—" }}</td>
+
+                <td class="text-muted small">
+                  {{ u.profile.employee_code if u.profile else "—" }}
+                  <div>{{ u.profile.designation.name if (u.profile and u.profile.designation) else "" }}</div>
+                  <div class="small">
+                    {% if u.profile and u.profile.team_role %}
+                      <span class="badge text-bg-secondary">{{ u.profile.team_role }}</span>
+                    {% endif %}
+                  </div>
+                </td>
+
+                <td class="text-muted small">
+                  {{ "%.2f"|format(u.monthly_ctc or 0) }}
+                </td>
+
+                <td class="text-muted small">
+                  {% if u.company_branch %}
+                    {{ u.company_branch.company.name }} — {{ u.company_branch.branch_name }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+                <td>
+                  <form method="post" action="{{ url_for('user_master.update_user', user_id=u.id) }}" class="row g-2">
+                    <div class="col-6">
+                      <input class="form-control form-control-sm" name="name" value="{{ u.name }}" {% if u.auth_provider!='LOCAL' %}readonly{% endif %}>
+                    </div>
+                    <div class="col-6">
+                      <input class="form-control form-control-sm" name="email" value="{{ u.email }}" {% if u.auth_provider!='LOCAL' %}readonly{% endif %}>
+                    </div>
+
+                    <div class="col-4">
+                      <select class="form-select form-select-sm" name="role_id">
+                        <option value="">—</option>
+                        {% for r in roles %}
+                          <option value="{{ r.id }}" {% if u.role_id==r.id %}selected{% endif %}>{{ r.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+
+                    <div class="col-4">
+                      <select class="form-select form-select-sm" name="is_active">
+                        <option value="1" {% if u.is_active %}selected{% endif %}>Active</option>
+                        <option value="0" {% if not u.is_active %}selected{% endif %}>Inactive</option>
+                      </select>
+                    </div>
+
+                    <div class="col-4">
+                      <input class="form-control form-control-sm" name="employee_code"
+                             value="{{ u.profile.employee_code if u.profile else '' }}" placeholder="Emp code">
+                    </div>
+
+                    <div class="col-6">
+                      <select class="form-select form-select-sm" name="designation_id">
+                        <option value="">—</option>
+                        {% for d in designations %}
+                          <option value="{{ d.id }}"
+                            {% if u.profile and u.profile.designation_id==d.id %}selected{% endif %}>
+                            {{ d.name }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </div>
+
+                    <div class="col-6">
+                      <input class="form-control form-control-sm" name="department"
+                             value="{{ u.profile.department if u.profile else '' }}" placeholder="Department">
+                    </div>
+
+                    <!-- ✅ Team role -->
+                    <div class="col-4">
+                      <select class="form-select form-select-sm" name="team_role">
+                        <option value="">—</option>
+                        <option value="BD" {% if u.profile and u.profile.team_role=='BD' %}selected{% endif %}>BD</option>
+                        <option value="AM" {% if u.profile and u.profile.team_role=='AM' %}selected{% endif %}>AM</option>
+                      </select>
+                    </div>
+
+                    <!-- ✅ Monthly CTC -->
+                    <div class="col-4">
+                      <input class="form-control form-control-sm" type="number" step="0.01" min="0"
+                             name="monthly_ctc" value="{{ u.monthly_ctc or 0 }}" placeholder="Monthly CTC">
+                    </div>
+
+                    <div class="col-4">
+                      <select class="form-select form-select-sm" name="reporting_manager_user_id">
+                        <option value="">—</option>
+                        {% for m in managers %}
+                          <option value="{{ m.id }}"
+                            {% if u.profile and u.profile.reporting_manager_user_id==m.id %}selected{% endif %}>
+                            {{ m.name }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </div>
+
+                    <!-- ✅ Company Branch -->
+                    <div class="col-8">
+                      <select class="form-select form-select-sm" name="company_branch_id">
+                        <option value="">—</option>
+                        {% for b in branches %}
+                          <option value="{{ b.id }}" {% if u.company_branch_id==b.id %}selected{% endif %}>
+                            {{ b.company.name }} — {{ b.branch_name }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </div>
+
+                    <div class="col-4 d-grid">
+                      <button class="btn btn-sm btn-outline-dark"><i class="bi bi-save2 me-1"></i>Save</button>
+                    </div>
+                  </form>
+
+                  {% if u.auth_provider == "LOCAL" %}
+                  <form method="post" action="{{ url_for('user_master.reset_password', user_id=u.id) }}" class="d-flex gap-2 mt-2">
+                    <input class="form-control form-control-sm" name="new_password" placeholder="New password">
+                    <button class="btn btn-sm btn-outline-primary">Reset</button>
+                  </form>
+                  {% else %}
+                    <div class="text-muted small mt-2">Password managed externally.</div>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+
+              {% if users|length == 0 %}
+                <tr><td colspan="7" class="text-center text-muted p-5">No users found</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const sel = document.getElementById("authProvider");
+  const wrap = document.getElementById("passwordWrap");
+  function toggle(){
+    const v = sel.value;
+    wrap.style.display = (v === "LOCAL") ? "block" : "none";
+  }
+  sel.addEventListener("change", toggle);
+  toggle();
+})();
+</script>
+{% endblock %}

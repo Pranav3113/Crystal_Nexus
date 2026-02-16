@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .btn-orange { background:#f57c00; border-color:#f57c00; color:#fff; }
+  .btn-orange:hover { filter: brightness(0.95); color:#fff; }
+  .badge-soft { padding: .4rem .6rem; border-radius: 999px; font-weight:600; }
+  .badge-pending { background: rgba(245,124,0,.15); color:#c25f00; }
+  .badge-verified { background: rgba(25,135,84,.15); color:#146c43; }
+  .badge-rejected { background: rgba(220,53,69,.15); color:#b02a37; }
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+  .muted { color:#6c757d; }
+  .kpi { font-size: 1.25rem; font-weight: 700; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-1">Invoice Payments</h4>
+    <div class="muted">
+      Invoice: <strong>#{{ invoice.id }}</strong> • <strong>{{ invoice.invoice_no }}</strong>
+      • Quote: <strong>#{{ invoice.quote_id }}</strong>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{{ url_for('invoices.view_invoice', invoice_id=invoice.id) }}">
+      <i class="bi bi-receipt me-1"></i> View Invoice
+    </a>
+    <a class="btn btn-outline-primary" href="javascript:history.back()">
+      <i class="bi bi-arrow-left me-1"></i> Back
+    </a>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="card card-soft p-3">
+      <div class="muted">Invoice Amount</div>
+      <div class="kpi">₹ {{ "%.2f"|format(invoice.total_amount|float) }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-soft p-3">
+      <div class="muted">Collected (Excluding Rejected)</div>
+      <div class="kpi">₹ {{ "%.2f"|format(collected|float) }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card card-soft p-3">
+      <div class="muted">Remaining</div>
+      <div class="kpi {% if remaining|float <= 0 %}text-success{% endif %}">
+  ₹ {{ "%.2f"|format(remaining|float) }}
+</div>
+    </div>
+  </div>
+</div>
+{% if invoice.status != "Paid" and invoice.status != "Cancelled" %}
+<div class="card card-soft p-3 mb-4">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="mb-0">Add Payment</h5>
+    <span class="muted">Status will be <strong>Pending</strong> until Finance verifies.</span>
+  </div>
+
+  <form method="POST" class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label">Payment Date</label>
+      <input type="date" name="payment_date" class="form-control" required>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Amount</label>
+      <input type="number"
+       step="0.01"
+       min="0.01"
+       max="{{ "%.2f"|format(remaining|float) }}"
+       name="amount"
+       class="form-control"
+       required>
+      <div class="form-text">Max available: ₹ {{ "%.2f"|format(remaining|float) }}</div>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Transfer Type</label>
+      <select class="form-select" name="transfer_type" required>
+        <option value="">Select</option>
+        <option>UPI</option><option>NEFT</option><option>RTGS</option><option>IMPS</option>
+        <option>Cash</option><option>Cheque</option><option>Card</option><option>Other</option>
+      </select>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Reference</label>
+      <input type="text" name="reference" class="form-control" placeholder="UTR / Cheque No / Notes">
+    </div>
+
+    <div class="col-12">
+      <button type="submit" class="btn btn-orange" {% if remaining|float <= 0 %}disabled{% endif %}>
+        <i class="bi bi-plus-circle me-1"></i> Add Payment
+      </button>
+    </div>
+  </form>
+</div>
+{% endif %}
+<div class="card card-soft p-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">Payment History</h5>
+    <div class="muted">Total Entries: <strong>{{ payments|length }}</strong></div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th style="width:120px;">Date</th>
+          <th style="width:130px;">Amount</th>
+          <th style="width:130px;">Type</th>
+          <th>Reference</th>
+          <th style="width:130px;">Status</th>
+          <th style="width:220px;">Finance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if payments|length == 0 %}
+          <tr><td colspan="6" class="text-center muted py-4">No payments yet.</td></tr>
+        {% else %}
+          {% for p in payments %}
+            <tr>
+              <td>{{ p.payment_date.strftime("%d-%b-%Y") if p.payment_date else "" }}</td>
+              <td>₹ {{ "%.2f"|format(p.amount|float) }}</td>
+              <td>{{ p.transfer_type }}</td>
+              <td class="text-break">{{ p.reference or "-" }}</td>
+              <td>
+                {% if p.status == "Pending" %}
+                  <span class="badge-soft badge-pending">Pending</span>
+                {% elif p.status == "Verified" %}
+                  <span class="badge-soft badge-verified">Verified</span>
+                {% else %}
+                  <span class="badge-soft badge-rejected">Rejected</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                {% if p.status != "Pending" %}
+                  <div><strong>At:</strong> {{ p.verified_at.strftime("%d-%b-%Y %H:%M") if p.verified_at else "-" }}</div>
+                  <div><strong>Remarks:</strong> {{ p.finance_remarks or "-" }}</div>
+                {% else %}
+                  <span class="muted">Waiting for verification</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
