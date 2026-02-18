@@ -28,6 +28,7 @@ def seed_all():
         # masters
         "masters.manage",
         "lead_services.manage",
+        "clusters.manage",
 
         # activities (future)
         "activities.view", "activities.create",

@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Pipeline vs Conversion{% endblock %}
+{% block header %}Pipeline vs Conversion (BD){% endblock %}
+
+{% block content %}
+<style>
+  .kpi { font-size: 1.25rem; font-weight: 800; }
+  .muted { color:#6c757d; }
+  .badge-soft { padding:.4rem .6rem; border-radius:999px; font-weight:700; }
+  .b-green { background: rgba(25,135,84,.15); color:#146c43; }
+  .b-amber { background: rgba(245,124,0,.15); color:#c25f00; }
+  .b-red { background: rgba(220,53,69,.15); color:#b02a37; }
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+
+  @media print{
+    .no-print{ display:none !important; }
+    .card, .card-soft { box-shadow:none !important; }
+    body { background:#fff !important; }
+  }
+</style>
+
+{% set cluster_label = (cluster.name if cluster else "All Clusters") %}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+  <form method="get" class="d-flex gap-2 align-items-end no-print">
+    <div>
+      <label class="form-label mb-1">Month</label>
+      <input type="month" class="form-control" name="month" value="{{ month_value }}">
+    </div>
+
+    <div>
+      <label class="form-label mb-1">Cluster</label>
+      <select class="form-select" name="cluster_id">
+        <option value="">All Clusters</option>
+        {% for c in clusters %}
+          <option value="{{ c.id }}" {% if cluster_id == (c.id|string) %}selected{% endif %}>
+            {{ c.name }} (Head: {{ c.head_user.name if c.head_user else '—' }})
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="pb-1 d-flex gap-2">
+      <button class="btn btn-outline-dark">
+        <i class="bi bi-funnel me-1"></i>Apply
+      </button>
+
+      <a class="btn btn-dark"
+         href="{{ url_for('reports.cluster_pipeline_conversion', month=month_value, cluster_id=cluster_id, format='pdf') }}">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
+      </a>
+    </div>
+  </form>
+
+  <div class="text-muted small text-end">
+    <div>Cluster: <span class="fw-semibold">{{ cluster_label }}</span></div>
+    <div>
+      Period: <span class="fw-semibold">{{ start_date }}</span> to <span class="fw-semibold">{{ end_date }}</span>
+    </div>
+    <div class="text-muted">
+      Scope: <b>BD</b> users only (team_role = BD)
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-md-3">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Leads Generated</div>
+        <div class="kpi">{{ total_leads or 0 }}</div>
+        <div class="text-muted small mt-1">This month (created_at).</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-3">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Opportunities Created</div>
+        <div class="kpi">{{ total_opps or 0 }}</div>
+        <div class="text-muted small mt-1">This month (created_at).</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-3">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Qualified Opportunities</div>
+        <div class="kpi">{{ qualified_opps or 0 }}</div>
+        <div class="text-muted small mt-1">Probability/stage based.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-3">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Conversion % (Won ÷ Qualified)</div>
+        <div class="kpi">{{ "%.2f"|format(conversion_pct or 0) }}%</div>
+        <div class="text-muted small mt-1">Won = invoices generated.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-md-4">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Won Deals</div>
+        <div class="kpi">{{ won_count or 0 }}</div>
+        <div class="text-muted small mt-1">Count of opportunities with invoices.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-4">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Won Value</div>
+        <div class="kpi">{{ "%.2f"|format(won_value or 0) }}</div>
+        <div class="text-muted small mt-1">Sum of invoices in selected month.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-4">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Avg Deal Size</div>
+        <div class="kpi">{{ "%.2f"|format(avg_deal_size or 0) }}</div>
+        <div class="text-muted small mt-1">Won Value ÷ Won Count.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-md-4">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="muted small">Avg Sales Cycle (days)</div>
+        <div class="kpi">{{ avg_cycle_days or 0 }}</div>
+        <div class="text-muted small mt-1">First invoice date − opportunity created date.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-8">
+    <div class="card card-soft">
+      <div class="card-body">
+        <div class="fw-semibold mb-2">Leads by Source</div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Source</th>
+                <th class="text-end">Leads</th>
+                <th class="text-end">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in leads_by_source %}
+                {% set pct = (r.count * 100 / total_leads) if total_leads else 0 %}
+                <tr>
+                  <td>{{ r.source }}</td>
+                  <td class="text-end">{{ r.count }}</td>
+                  <td class="text-end">{{ "%.1f"|format(pct) }}%</td>
+                </tr>
+              {% endfor %}
+              {% if (leads_by_source|length) == 0 %}
+                <tr><td colspan="3" class="text-center text-muted py-3">No leads found for this month</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-muted small mt-1">
+          Note: Lead ownership is based on <b>Lead.owner_id</b>.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card card-soft">
+  <div class="card-body">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <div class="fw-semibold">BD Users in Scope</div>
+      <div class="text-muted small">Cluster filter applies to reporting tree of cluster head.</div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th class="text-end">Monthly CTC</th>
+            <th>Team Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in bd_users %}
+          <tr>
+            <td class="fw-semibold">{{ u.name }}</td>
+            <td class="text-muted small">{{ u.email }}</td>
+            <td class="text-end">{{ "%.2f"|format(u.monthly_ctc or 0) }}</td>
+            <td><span class="badge text-bg-light text-dark">BD</span></td>
+          </tr>
+          {% endfor %}
+          {% if (bd_users|length) == 0 %}
+            <tr><td colspan="4" class="text-center text-muted p-5">No BD users found for selected cluster</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="text-muted small mt-2">
+      Definitions:
+      <ul class="mb-0">
+        <li><b>Qualified Opps</b>: stage probability ≥ 50 or stage name contains Qualified/Proposal/Negotiation/Won.</li>
+        <li><b>Won</b>: opportunity that has at least one invoice in the selected month.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

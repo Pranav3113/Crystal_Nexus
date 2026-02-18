@@ -52,6 +52,15 @@ def _team_user_ids(manager_user_id: int, include_self: bool = True):
 
     return list(seen)
 
+def _opportunity_has_any_invoice(opportunity_id: int) -> bool:
+    return (
+        db.session.query(func.count(Invoice.id))
+        .join(Quote, Quote.id == Invoice.quote_id)
+        .filter(Quote.opportunity_id == opportunity_id)
+        .scalar()
+        or 0
+    ) > 0
+
 def _calculate_tax_components(q: Quote):
     """
     Returns (cgst, sgst, igst, total_tax)
@@ -379,7 +388,7 @@ def edit_quote(quote_id):
 
     if request.method == "POST":
         q.currency = (request.form.get("currency") or "INR").strip().upper()
-        # ✅ INR-only GST toggle
+
         if q.currency != "INR":
             q.is_gst_applicable = False
         else:
@@ -1024,6 +1033,10 @@ def list_quotes():
 def create_new_version(quote_id):
     base = Quote.query.get_or_404(quote_id)
     _require_quote_access(base)
+
+    if _opportunity_has_any_invoice(base.opportunity_id):
+        flash("Invoice already generated for this Opportunity. New quote versions are blocked.", "warning")
+        return redirect(url_for("quotes.view_quote", quote_id=base.id))
 
     draft = _get_status("Draft")
 

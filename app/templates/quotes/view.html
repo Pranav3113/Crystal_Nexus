@@ -98,15 +98,23 @@
       </a>
     {% endif %}
 
-    {# New version always available if status exists #}
+    {# New version blocked if invoice exists #}
     {% if q.status %}
-      <form method="post"
-            action="{{ url_for('quotes.create_new_version', quote_id=q.id) }}"
-            class="d-inline m-0">
-        <button class="btn btn-outline-dark" type="submit">
-          <i class="bi bi-layers me-1"></i>New Version
+      {% if inv_exists %}
+        <button class="btn btn-outline-secondary" type="button" disabled
+                title="Invoice already created. New quote versions are blocked.">
+          <i class="bi bi-lock me-1"></i>New Version
         </button>
-      </form>
+      {% else %}
+        <form method="post"
+              action="{{ url_for('quotes.create_new_version', quote_id=q.id) }}"
+              class="d-inline m-0"
+              onsubmit="return confirm('Create a new version of this quote?');">
+          <button class="btn btn-outline-dark" type="submit">
+            <i class="bi bi-layers me-1"></i>New Version
+          </button>
+        </form>
+      {% endif %}
     {% endif %}
 
     {# ✅ STEP 1: Approved/Sent (not linked) -> Convert to Client => Selected #}

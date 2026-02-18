@@ -1,11 +1,11 @@
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, make_response
 from flask_login import login_required, current_user
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from datetime import datetime, timedelta
 from app import db
 from app.utils import require_perm
-from app.models import ProformaInvoice, Invoice, QuoteItem, Quote, Opportunity, EmployeeProfile
+from app.models import ProformaInvoice, Invoice, QuoteItem, Quote, Opportunity, EmployeeProfile, PipelineStage, OpportunityStageHistory
 
 
 invoices_bp = Blueprint("invoices", __name__, url_prefix="/invoices", template_folder="../templates")
@@ -32,6 +32,44 @@ def _team_user_ids(manager_user_id: int, include_self: bool = True):
 
     return list(seen)
 
+def _get_won_stage_id():
+    # Preferred: stage name = "Won"
+    won = (PipelineStage.query
+           .filter(func.lower(PipelineStage.name) == "won")
+           .first())
+    if won:
+        return won.id
+
+    # Fallback: any stage containing 'won'
+    won = (PipelineStage.query
+           .filter(func.lower(PipelineStage.name).like("%won%"))
+           .order_by(PipelineStage.sort_order.asc())
+           .first())
+    return won.id if won else None
+
+def _mark_opportunity_won(opportunity, changed_by_id: int, remark="Auto: Invoice Generated"):
+    if not opportunity:
+        return
+
+    won_stage_id = _get_won_stage_id()
+    if not won_stage_id:
+        return  # if you don't have Won stage in masters, nothing to do
+
+    if opportunity.stage_id == won_stage_id:
+        return
+
+    old_stage_id = opportunity.stage_id
+    opportunity.stage_id = won_stage_id
+    opportunity.updated_at = datetime.utcnow()
+    db.session.flush()
+
+    db.session.add(OpportunityStageHistory(
+        opportunity_id=opportunity.id,
+        from_stage_id=old_stage_id,
+        to_stage_id=won_stage_id,
+        changed_by_id=changed_by_id,
+        remark=remark
+    ))
 
 def _can_access_quote(q: Quote) -> bool:
     if current_user.has_perm("quotes.view_all") or current_user.has_perm("invoices.view_all"):
@@ -147,6 +185,10 @@ def create_invoice_from_pi(pi_id):
     quote.invoice_generated_by_id = current_user.id
 
     db.session.add(inv)
+    db.session.flush()
+
+    _mark_opportunity_won(inv.quote.opportunity if inv.quote else None, changed_by_id=current_user.id)
+
     db.session.commit()
 
     flash("Invoice created ✅", "success")

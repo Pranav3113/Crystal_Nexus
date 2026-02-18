@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
-from sqlalchemy import func, distinct, case
+from sqlalchemy import func, distinct, case, or_
 from typing import List
 from datetime import date, timedelta
 
@@ -9,7 +9,7 @@ from ..models import (
     LeadStatus, LeadSource, ActivityType, AuditLog, LeadActivity, QuoteApproval,
     User, EmployeeProfile,
     Lead, Opportunity, Quote, PaymentCollection,
-    PipelineStage, QuoteStatus
+    PipelineStage, QuoteStatus, Cluster
 )
 from ..utils import require_perm
 
@@ -602,3 +602,137 @@ def update_activity_type(type_id):
 def audit_logs():
     logs = AuditLog.query.order_by(AuditLog.performed_at.desc()).limit(500).all()
     return render_template("admin/audit_logs.html", logs=logs)
+
+
+
+
+@admin_bp.route("/cluster-master", methods=["GET", "POST"])
+@login_required
+@require_perm("clusters.manage")
+def cluster_master():
+    # ---------- Create / Update ----------
+    if request.method == "POST":
+        action = (request.form.get("action") or "").strip()
+
+        name = (request.form.get("name") or "").strip()
+        head_user_id = (request.form.get("head_user_id") or "").strip()
+        is_active = True if (request.form.get("is_active") == "1") else False
+
+        if not name:
+            flash("Cluster name is required.", "danger")
+            return redirect(url_for("admin.cluster_master"))
+
+        if not head_user_id.isdigit():
+            flash("Please select a valid Cluster Head.", "danger")
+            return redirect(url_for("admin.cluster_master"))
+
+        head_user_id = int(head_user_id)
+
+        # Ensure head user exists + active
+        head_user = User.query.get(head_user_id)
+        if not head_user or not head_user.is_active:
+            flash("Selected cluster head is invalid/inactive.", "danger")
+            return redirect(url_for("admin.cluster_master"))
+
+        # Optional (recommended): allow only BD/AM to be heads
+        try:
+            role = (head_user.profile.team_role or "").upper()
+        except Exception:
+            role = ""
+        if role not in ("BD", "AM"):
+            flash("Cluster head must have Team Role BD or AM.", "warning")
+
+        if action == "create":
+            # prevent duplicate cluster name
+            existing = Cluster.query.filter(db.func.lower(Cluster.name) == name.lower()).first()
+            if existing:
+                flash("Cluster with this name already exists.", "danger")
+                return redirect(url_for("admin.cluster_master"))
+
+            c = Cluster(name=name, head_user_id=head_user_id, is_active=is_active)
+            db.session.add(c)
+            db.session.commit()
+            flash("Cluster created successfully.", "success")
+            return redirect(url_for("admin.cluster_master"))
+
+        elif action == "update":
+            cid = (request.form.get("id") or "").strip()
+            if not cid.isdigit():
+                flash("Invalid cluster id.", "danger")
+                return redirect(url_for("admin.cluster_master"))
+
+            c = Cluster.query.get(int(cid))
+            if not c:
+                flash("Cluster not found.", "danger")
+                return redirect(url_for("admin.cluster_master"))
+
+            # prevent duplicate name to another record
+            dup = (Cluster.query
+                   .filter(db.func.lower(Cluster.name) == name.lower())
+                   .filter(Cluster.id != c.id)
+                   .first())
+            if dup:
+                flash("Another cluster with this name already exists.", "danger")
+                return redirect(url_for("admin.cluster_master"))
+
+            c.name = name
+            c.head_user_id = head_user_id
+            c.is_active = is_active
+            db.session.commit()
+            flash("Cluster updated successfully.", "success")
+            return redirect(url_for("admin.cluster_master"))
+
+        elif action == "delete":
+            cid = (request.form.get("id") or "").strip()
+            if not cid.isdigit():
+                flash("Invalid cluster id.", "danger")
+                return redirect(url_for("admin.cluster_master"))
+
+            c = Cluster.query.get(int(cid))
+            if not c:
+                flash("Cluster not found.", "danger")
+                return redirect(url_for("admin.cluster_master"))
+
+            # soft delete recommended
+            c.is_active = False
+            db.session.commit()
+            flash("Cluster disabled (soft deleted).", "success")
+            return redirect(url_for("admin.cluster_master"))
+
+        flash("Invalid action.", "danger")
+        return redirect(url_for("admin.cluster_master"))
+
+    # ---------- List / Filters ----------
+    q = (request.args.get("q") or "").strip()
+    status = (request.args.get("status") or "").strip()  # all/active/inactive
+
+    qs = Cluster.query.join(User, Cluster.head_user_id == User.id)
+
+    if q:
+        qs = qs.filter(or_(
+            db.func.lower(Cluster.name).like(f"%{q.lower()}%"),
+            db.func.lower(User.name).like(f"%{q.lower()}%"),
+            db.func.lower(User.email).like(f"%{q.lower()}%")
+        ))
+
+    if status == "active":
+        qs = qs.filter(Cluster.is_active == True)
+    elif status == "inactive":
+        qs = qs.filter(Cluster.is_active == False)
+
+    clusters = qs.order_by(Cluster.id.desc()).all()
+
+    # Head candidates
+    users = (User.query
+             .join(EmployeeProfile, EmployeeProfile.user_id == User.id)
+             .filter(User.is_active == True)
+             .order_by(User.name.asc())
+             .all())
+
+    return render_template(
+        "admin/cluster_master.html",
+        clusters=clusters,
+        users=users,
+        q=q,
+        status=status
+    )

@@ -16,27 +16,27 @@
   </div>
 </div>
 
-<form class="card card-soft p-3 mb-3" method="GET">
+<form class="card card-soft p-3 mb-3" method="GET" action="{{ url_for('payments.finance_payment_queue') }}">
   <div class="row g-2 align-items-end">
     <div class="col-md-4">
       <label class="form-label">Search</label>
-      <input class="form-control" name="q" value="{{ q }}" placeholder="Quote ID / Lead ID / Reference / Type">
+      <input class="form-control" name="q" value="{{ q or '' }}" placeholder="Invoice ID / Lead ID / Reference / Type">
     </div>
     <div class="col-md-2">
       <label class="form-label">Status</label>
       <select class="form-select" name="status">
-        <option value="Pending" {% if status=='Pending' %}selected{% endif %}>Pending</option>
+        <option value="Pending" {% if (status or 'Pending')=='Pending' %}selected{% endif %}>Pending</option>
         <option value="Verified" {% if status=='Verified' %}selected{% endif %}>Verified</option>
         <option value="Rejected" {% if status=='Rejected' %}selected{% endif %}>Rejected</option>
       </select>
     </div>
     <div class="col-md-2">
       <label class="form-label">From</label>
-      <input type="date" class="form-control" name="date_from" value="{{ date_from }}">
+      <input type="date" class="form-control" name="date_from" value="{{ date_from or '' }}">
     </div>
     <div class="col-md-2">
       <label class="form-label">To</label>
-      <input type="date" class="form-control" name="date_to" value="{{ date_to }}">
+      <input type="date" class="form-control" name="date_to" value="{{ date_to or '' }}">
     </div>
     <div class="col-md-2 d-flex gap-2">
       <button class="btn btn-primary w-100"><i class="bi bi-search me-1"></i>Filter</button>
@@ -54,8 +54,8 @@
           <th style="width:130px;">Amount</th>
           <th style="width:120px;">Type</th>
           <th>Reference</th>
-          <th style="width:220px;">Quote</th>
-          <th style="width:300px;">Action</th>
+          <th style="width:290px;">Invoice / Summary</th>
+          <th style="width:320px;">Action</th>
         </tr>
       </thead>
       <tbody>
@@ -63,31 +63,47 @@
           <tr><td colspan="6" class="text-center muted py-4">No records found.</td></tr>
         {% else %}
           {% for p in pending %}
-            {% set qt = quote_map.get(p.invoice_id) %}
+            {% set inv = p.invoice %}
+            {% set qt = inv.quote if inv else None %}
             <tr>
               <td>{{ p.payment_date.strftime("%d-%b-%Y") if p.payment_date else "-" }}</td>
               <td>₹ {{ "%.2f"|format(p.amount|float) }}</td>
               <td>{{ p.transfer_type }}</td>
               <td class="text-break">{{ p.reference or "-" }}</td>
+
               <td>
-                <div><strong>#{{ p.invoice_id }}</strong></div>
-                {% if p.lead_id %}<div class="small muted">Lead #{{ p.lead_id }}</div>{% endif %}
+                <div><strong>Invoice #{{ p.invoice_id }}</strong></div>
+
                 {% if qt %}
-                  <div class="tiny muted">
-                    Total: ₹ {{ "%.2f"|format(qt.total_amount|float) }}
-                    • Collected: ₹ {{ "%.2f"|format(qt.collected_amount()|float) }}
-                    • Remaining: ₹ {{ "%.2f"|format(qt.remaining_amount()|float) }}
-                  </div>
-                  <div class="mt-1">
-                    <a class="small text-decoration-none" href="{{ url_for('payments.quote_payments', quote_id=p.invoice_id) }}">
-                      Open payment page →
-                    </a>
-                  </div>
+                  <div class="small muted">Quote #{{ qt.id }}</div>
                 {% endif %}
+                {% if p.lead_id %}
+                  <div class="small muted">Lead #{{ p.lead_id }}</div>
+                {% endif %}
+
+                {% if inv %}
+                  <div class="tiny muted mt-1">
+                    Invoice Total: ₹ {{ "%.2f"|format(inv.total_amount|float) }}
+                    • Collected: ₹ {{ "%.2f"|format(inv.collected_amount()|float) }}
+                    • Remaining: ₹ {{ "%.2f"|format(inv.remaining_amount()|float) }}
+                  </div>
+                {% else %}
+                  <div class="tiny muted mt-1">Invoice details: —</div>
+                {% endif %}
+
+                <div class="mt-1">
+                  <a class="small text-decoration-none"
+                     href="{{ url_for('payments.invoice_payments', invoice_id=p.invoice_id) }}">
+                    Open payment page →
+                  </a>
+                </div>
               </td>
+
               <td>
                 {% if p.status == "Pending" %}
-                  <form method="POST" action="{{ url_for('payments.finance_payment_action', payment_id=p.id) }}" class="d-flex gap-2">
+                  <form method="POST"
+                        action="{{ url_for('payments.finance_payment_action', payment_id=p.id) }}"
+                        class="d-flex gap-2">
                     <input type="text" name="finance_remarks" class="form-control form-control-sm"
                            placeholder="Remarks (optional)">
                     <button class="btn btn-sm btn-success" name="action" value="verify"
@@ -99,7 +115,7 @@
                       Reject
                     </button>
                   </form>
-                  <div class="small muted mt-1">System re-checks quote cap before verifying.</div>
+                  <div class="small muted mt-1">System re-checks invoice cap before verifying.</div>
                 {% else %}
                   <div class="small">
                     <div><strong>Status:</strong> {{ p.status }}</div>

@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 from sqlalchemy import func
-
+from sqlalchemy.orm import joinedload
 from app import db
 from app.utils import require_perm
 from app.models import Invoice, InvoicePayment
@@ -138,12 +138,67 @@ def invoice_payments(invoice_id):
 @require_perm("payments.verify")
 def finance_payment_queue():
     ensure_finance_or_admin()
-    pending = (InvoicePayment.query
-               .filter_by(status="Pending")
-               .order_by(InvoicePayment.created_at.asc())
-               .all())
-    return render_template("payments/finance_payment_queue.html", pending=pending)
 
+    # ---- filters from querystring ----
+    q = (request.args.get("q") or "").strip()
+    status = (request.args.get("status") or "Pending").strip()  # Pending / Verified / Rejected
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+
+    qs = (
+        InvoicePayment.query
+        .options(joinedload(InvoicePayment.invoice).joinedload(Invoice.quote))
+    )
+
+    # status filter
+    if status in ("Pending", "Verified", "Rejected"):
+        qs = qs.filter(InvoicePayment.status == status)
+
+    # date filters (payment_date)
+    try:
+        if date_from:
+            df = datetime.strptime(date_from, "%Y-%m-%d").date()
+            qs = qs.filter(InvoicePayment.payment_date >= df)
+    except Exception:
+        flash("Invalid From date.", "warning")
+
+    try:
+        if date_to:
+            dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+            qs = qs.filter(InvoicePayment.payment_date <= dt)
+    except Exception:
+        flash("Invalid To date.", "warning")
+
+    # search filter (invoice_id / lead_id / reference / type)
+    if q:
+        # invoice_id or lead_id direct
+        if q.isdigit():
+            qn = int(q)
+            qs = qs.filter(
+                db.or_(
+                    InvoicePayment.invoice_id == qn,
+                    InvoicePayment.lead_id == qn
+                )
+            )
+        else:
+            like = f"%{q}%"
+            qs = qs.filter(
+                db.or_(
+                    InvoicePayment.reference.ilike(like),
+                    InvoicePayment.transfer_type.ilike(like),
+                )
+            )
+
+    pending = qs.order_by(InvoicePayment.created_at.desc()).all()
+
+    return render_template(
+        "payments/finance_payment_queue.html",
+        pending=pending,
+        q=q,
+        status=status,
+        date_from=date_from,
+        date_to=date_to
+    )
 
 @payments_bp.route("/finance/payment/<int:payment_id>/action", methods=["POST"])
 @login_required
@@ -192,3 +247,4 @@ def finance_payment_action(payment_id):
         flash("Action failed.", "danger")
 
     return redirect(url_for("payments.finance_payment_queue"))
+
