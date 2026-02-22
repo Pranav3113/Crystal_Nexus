@@ -1,0 +1,477 @@
+{# app/templates/platform/tenants.html #}
+{% extends "base.html" %}
+{% block title %}Tenants{% endblock %}
+{% block header %}Platform • Tenants{% endblock %}
+
+{% block content %}
+<style>
+  :root{
+    --cn-orange:#f57c00;
+    --cn-border: rgba(0,0,0,.08);
+    --cn-soft: rgba(15, 23, 42, .04);
+    --cn-muted:#64748b;
+  }
+
+  .page-wrap{
+  max-width: none;     /* ✅ full width */
+  width: 100%;
+}
+  .card-soft{
+    border: 1px solid var(--cn-border);
+    border-radius: 16px;
+    box-shadow: 0 10px 26px rgba(0,0,0,.05);
+    background:#fff;
+    overflow:hidden;
+  }
+
+  .btn-orange{background:var(--cn-orange); border-color:var(--cn-orange); color:#fff;}
+  .btn-orange:hover{filter:brightness(.95); color:#fff;}
+  .mono{font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;}
+
+  /* Top toolbar */
+  .toolbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom: 14px;
+  }
+  .toolbar .meta .title{
+    font-size:1.25rem;
+    font-weight: 800;
+    margin:0;
+    line-height:1.1;
+  }
+  .toolbar .meta .sub{color:#6c757d; font-size:.9rem; margin-top:2px;}
+  .toolbar .actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+
+  .search-wrap{position:relative;}
+  .search{
+    width: 360px;
+    border-radius: 999px;
+    padding-left: 40px;
+  }
+  .search-wrap i{
+    position:absolute; left:14px; top:50%;
+    transform:translateY(-50%);
+    color: var(--cn-muted);
+    pointer-events:none;
+  }
+
+  /* Header row (desktop) */
+  .list-head{
+    display:grid;
+    grid-template-columns: 84px 1.7fr 280px 220px 360px;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--cn-border);
+    color: var(--cn-muted);
+    font-size: .78rem;
+    text-transform: uppercase;
+    font-weight: 850;
+    letter-spacing: .35px;
+  }
+
+  /* Rows */
+  .tenant-row{
+    display:grid;
+    grid-template-columns: 84px 1.7fr 280px 220px 360px;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    align-items: center;
+  }
+  .tenant-row:last-child{border-bottom:0;}
+  .tenant-row:hover{background: rgba(13,110,253,.03);}
+
+  /* Logo */
+  .logo-wrap{display:flex; align-items:center; justify-content:center;}
+  .logo-box{
+    width:56px; height:56px;
+    border-radius: 14px;
+    border: 1px solid var(--cn-border);
+    background: linear-gradient(180deg, #ffffff, #f7f8fb);
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    box-shadow: 0 10px 18px rgba(0,0,0,.06);
+  }
+  .logo-box img{max-width:80%; max-height:80%; object-fit:contain; display:block;}
+  .logo-fallback{
+    width:34px; height:34px;
+    border-radius: 12px;
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(245,124,0,.12);
+    color: var(--cn-orange);
+    font-weight: 900;
+    letter-spacing: .6px;
+  }
+
+  /* Tenant main */
+  .name-line{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .tenant-name{font-weight: 850; font-size: 1.02rem; line-height:1.15;}
+  .slug-chip{
+    font-size:.78rem;
+    padding: .18rem .55rem;
+    border-radius: 999px;
+    background:#f1f5f9;
+    border: 1px solid #e2e8f0;
+    color:#0f172a;
+  }
+
+  .badges{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .badge-soft{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:.25rem .55rem;
+    border-radius:999px;
+    font-weight: 800;
+    font-size:.78rem;
+    border:1px solid transparent;
+    width: fit-content;
+    white-space:nowrap;
+  }
+
+  .db-line{
+    margin-top: 6px;
+    display:flex; align-items:center; gap:8px;
+    color: var(--cn-muted);
+    font-size:.86rem;
+    min-width:0;
+  }
+  .db-line .db{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .mini-meta{
+    margin-top:6px;
+    color:#94a3b8;
+    font-size:.82rem;
+    display:flex; align-items:center; gap:8px;
+    flex-wrap:wrap;
+  }
+
+  /* Dates column */
+  .dates{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .kv{display:flex; gap:10px; align-items:center;}
+  .kv .k{width:52px; color: var(--cn-muted); font-size:.78rem;}
+  .kv .v{font-size:.88rem; color:#0f172a;}
+  .kv .v.mono{font-weight:700;}
+
+  /* Status column */
+  .status{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .status .hint{color: var(--cn-muted); font-size:.78rem; font-weight: 800; text-transform: uppercase; letter-spacing:.25px;}
+  .link-chip{
+    display:inline-flex;
+    gap:8px;
+    align-items:center;
+    padding:.35rem .6rem;
+    border-radius: 12px;
+    border:1px solid #e2e8f0;
+    background:#fff;
+    color:#0f172a;
+    font-size:.86rem;
+    width: fit-content;
+    max-width: 100%;
+  }
+  .link-chip .txt{
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    max-width: 160px;
+  }
+  .copy-btn{
+    border:0;
+    background: transparent;
+    color:#2563eb;
+    padding:0;
+    font-weight:800;
+    cursor:pointer;
+  }
+
+  /* Actions */
+  .actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .extend-form{
+    display:flex; gap:8px; align-items:center;
+  }
+  .extend-form input[type="date"]{
+    width: 170px;
+    border-radius: 12px;
+  }
+  .btn-sm{border-radius: 12px;}
+
+  /* Responsive: stack nicely */
+  @media (max-width: 1200px){
+    .list-head, .tenant-row{
+      grid-template-columns: 84px 1.7fr 240px 200px 340px;
+    }
+    .search{width: 300px;}
+  }
+
+  @media (max-width: 992px){
+    .toolbar{flex-direction:column; align-items:stretch;}
+    .toolbar .actions{justify-content:space-between;}
+    .search{width: 100%;}
+    .list-head{display:none;}
+    .tenant-row{
+      grid-template-columns: 84px 1fr;
+      grid-template-areas:
+        "logo main"
+        "dates dates"
+        "status status"
+        "actions actions";
+      align-items:start;
+      gap: 10px 12px;
+    }
+    .logo-wrap{grid-area: logo;}
+    .main{grid-area: main;}
+    .dates{grid-area: dates; padding-top:4px;}
+    .status{grid-area: status; padding-top:4px;}
+    .actions{grid-area: actions; justify-content:flex-start; padding-top:4px;}
+    .extend-form input[type="date"]{width: 180px;}
+  }
+
+  @media (max-width: 520px){
+    .extend-form{flex-direction:column; align-items:stretch; width:100%;}
+    .extend-form input[type="date"]{width:100%;}
+    .actions{width:100%;}
+    .actions a, .actions button{width:100%;}
+  }
+</style>
+
+<div class="page-wrap px-2 px-lg-3">
+
+  <div class="toolbar">
+    <div class="meta">
+      <div class="title">Tenants</div>
+      <div class="sub">Manage tenant registry (platform database)</div>
+    </div>
+
+    <div class="actions">
+      <div class="search-wrap flex-grow-1" style="min-width:260px;">
+        <i class="bi bi-search"></i>
+        <input id="tenantSearch" class="form-control form-control-sm search" placeholder="Search name / slug / db…">
+      </div>
+
+      <a class="btn btn-orange" href="{{ url_for('platform.tenants_new') }}">
+        <i class="bi bi-plus-lg me-1"></i> New Tenant
+      </a>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, msg in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="card card-soft">
+
+    <div class="list-head">
+      <div>Logo</div>
+      <div>Tenant</div>
+      <div>Dates</div>
+      <div>Status</div>
+      <div class="text-end">Actions</div>
+    </div>
+
+    <div class="card-body p-0">
+      {% if tenants %}
+        {% for t in tenants %}
+          {% set start_txt = (t.start_date.strftime("%Y-%m-%d") if t.start_date else "—") %}
+          {% set end_txt = (t.end_date.strftime("%Y-%m-%d") if t.end_date else "—") %}
+          {% set domain = (config.get("BASE_DOMAIN","") or "") %}
+          {% set full_host = (t.slug ~ "." ~ domain) if domain else t.slug %}
+
+          <div class="tenant-row tenant-item"
+               data-search="{{ (t.name ~ ' ' ~ t.slug ~ ' ' ~ (t.db_uri or '')).lower() }}">
+
+            <!-- Logo -->
+            <div class="logo-wrap">
+              <div class="logo-box">
+                {% if t.logo %}
+                  <img
+                    src="{{ url_for('static', filename='tenant_logos/' ~ t.logo) }}"
+                    alt="Logo"
+                    onerror="this.remove(); this.parentElement.innerHTML = '<div class=&quot;logo-fallback&quot;>{{ (t.name[:1] if t.name else 'T')|upper }}</div>';"
+                  >
+                {% else %}
+                  <div class="logo-fallback">{{ (t.name[:1] if t.name else 'T')|upper }}</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Main -->
+            <div class="main">
+              <div class="name-line">
+                <div class="tenant-name">{{ t.name }}</div>
+                <span class="slug-chip mono">{{ t.slug }}</span>
+              </div>
+
+              <div class="badges mt-2">
+                {% if t.is_active %}
+                  <span class="badge-soft bg-success-subtle text-success border border-success-subtle">
+                    <i class="bi bi-check-circle"></i> Active
+                  </span>
+                {% else %}
+                  <span class="badge-soft bg-danger-subtle text-danger border border-danger-subtle">
+                    <i class="bi bi-x-circle"></i> Inactive
+                  </span>
+                {% endif %}
+
+                {% if t.end_date %}
+                  {% if t.is_expired %}
+                    <span class="badge-soft bg-danger-subtle text-danger border border-danger-subtle">
+                      <i class="bi bi-exclamation-triangle"></i> Expired
+                    </span>
+                  {% else %}
+                    <span class="badge-soft bg-primary-subtle text-primary border border-primary-subtle">
+                      <i class="bi bi-shield-check"></i> Valid
+                    </span>
+                  {% endif %}
+                {% else %}
+                  <span class="badge-soft bg-secondary-subtle text-secondary border border-secondary-subtle">
+                    <i class="bi bi-infinity"></i> No expiry
+                  </span>
+                {% endif %}
+              </div>
+
+              <div class="db-line" title="{{ t.db_uri }}">
+                <i class="bi bi-database"></i>
+                <span class="db mono">{{ t.db_uri }}</span>
+              </div>
+
+              <div class="mini-meta">
+                <span><i class="bi bi-clock me-1"></i>Created: {% if t.created_at %}{{ t.created_at.strftime("%Y-%m-%d %H:%M") }}{% else %}—{% endif %}</span>
+                {% if t.logo %}
+                  <span class="mono"><i class="bi bi-image me-1"></i>{{ t.logo }}</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Dates -->
+            <div class="dates">
+              <div class="kv">
+                <div class="k">Start</div>
+                <div class="v mono">{{ start_txt }}</div>
+              </div>
+              <div class="kv">
+                <div class="k">End</div>
+                <div class="v mono">{{ end_txt }}</div>
+              </div>
+            </div>
+
+            <!-- Status / Quick actions -->
+            <div class="status">
+              <div class="hint">Quick actions</div>
+
+              <div class="link-chip" title="{{ full_host }}">
+                <i class="bi bi-link-45deg"></i>
+                <span class="mono txt" id="host-{{t.id}}">{{ full_host }}</span>
+                <button type="button" class="copy-btn" data-copy="#host-{{t.id}}">
+                  Copy
+                </button>
+              </div>
+
+              {% if t.end_date and t.is_expired %}
+                <div class="text-danger small">
+                  <i class="bi bi-info-circle me-1"></i>Expired — extend to re-enable access.
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- Actions -->
+            <div class="actions">
+              <form method="post"
+                    action="{{ url_for('platform.tenants_extend', tenant_id=t.id) }}"
+                    class="extend-form">
+                <input type="date" class="form-control form-control-sm"
+                       name="new_end_date" required aria-label="New end date">
+                <button class="btn btn-sm btn-outline-primary" type="submit">
+                  <i class="bi bi-calendar-plus me-1"></i> Extend
+                </button>
+              </form>
+
+              <a class="btn btn-sm btn-outline-primary"
+                 href="{{ url_for('platform.tenants_edit', tenant_id=t.id) }}">
+                <i class="bi bi-pencil-square me-1"></i> Edit
+              </a>
+            </div>
+
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="p-4 text-center text-muted">
+          No tenants found. Click <b>New Tenant</b> to create one.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  // search filter
+  (function(){
+    const input = document.getElementById("tenantSearch");
+    if(!input) return;
+    const items = Array.from(document.querySelectorAll(".tenant-item"));
+    input.addEventListener("input", function(){
+      const q = (this.value || "").trim().toLowerCase();
+      items.forEach(el => {
+        const hay = el.getAttribute("data-search") || "";
+        el.style.display = (!q || hay.includes(q)) ? "" : "none";
+      });
+    });
+  })();
+
+  // copy buttons
+  (function(){
+    document.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-copy]");
+      if(!btn) return;
+      const sel = btn.getAttribute("data-copy");
+      const el = document.querySelector(sel);
+      if(!el) return;
+      const text = (el.textContent || "").trim();
+      try{
+        await navigator.clipboard.writeText(text);
+        const old = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(()=> btn.textContent = old, 900);
+      }catch(err){
+        // fallback
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        const old = btn.textContent;
+        btn.textContent = "Copied";
+        setTimeout(()=> btn.textContent = old, 900);
+      }
+    });
+  })();
+</script>
+{% endblock %}

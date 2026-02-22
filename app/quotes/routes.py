@@ -30,96 +30,110 @@ from ..models import (
 
 quotes_bp = Blueprint("quotes", __name__, template_folder="../templates")
 
-
 # -------------------------
 # VISIBILITY HELPERS (same as Leads)
 # -------------------------
-def _team_user_ids(manager_user_id: int, include_self: bool = True):
-    seen = set([manager_user_id]) if include_self else set()
-    queue = [manager_user_id]
+def _calculate_tax_components(q: Quote):
+    """
+    Returns: (cgst, sgst, igst, total_tax)
+    Rules:
+    - GST only when currency == INR AND is_gst_applicable == True
+    - If customer's billing_state == company_branch.state -> CGST+SGST (9%+9%)
+    - Else -> IGST (18%)
+    """
+    try:
+        subtotal = _d(q.subtotal, "0")
+        discount = _d(q.discount, "0")
+        taxable = subtotal - discount
+        if taxable < 0:
+            taxable = Decimal("0")
+    except Exception:
+        taxable = Decimal("0")
 
-    while queue:
-        mid = queue.pop(0)
+    currency = (q.currency or "INR").strip().upper()
+    if currency != "INR" or not getattr(q, "is_gst_applicable", False):
+        return (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+
+    # Need both states to decide IGST vs CGST/SGST
+    company_state = None
+    if getattr(q, "company_branch", None) and getattr(q.company_branch, "state", None):
+        company_state = (q.company_branch.state or "").strip().lower()
+
+    billing_state = (getattr(q, "billing_state", None) or "").strip().lower()
+
+    # If states missing, default to IGST (safer than silently doing CGST/SGST)
+    if not company_state or not billing_state:
+        igst = (taxable * Decimal("0.18"))
+        return (Decimal("0"), Decimal("0"), igst, igst)
+
+    if company_state == billing_state:
+        cgst = (taxable * Decimal("0.09"))
+        sgst = (taxable * Decimal("0.09"))
+        total_tax = cgst + sgst
+        return (cgst, sgst, Decimal("0"), total_tax)
+
+    igst = (taxable * Decimal("0.18"))
+    return (Decimal("0"), Decimal("0"), igst, igst)
+
+
+def _opportunity_has_any_invoice(opportunity_id: int) -> bool:
+    if not opportunity_id:
+        return False
+    return (
+        db.session.query(Invoice.id)
+        .join(Quote, Quote.id == Invoice.quote_id)
+        .filter(Quote.opportunity_id == opportunity_id)
+        .filter(Invoice.status != "Cancelled")
+        .limit(1)
+        .scalar()
+        is not None
+    )
+
+def _team_user_ids(manager_user_id: int, include_self: bool = True):
+    """
+    Returns a list of user_ids in the manager's reporting tree.
+    include_self=True includes the manager_user_id in the returned list.
+    """
+    seen = set([manager_user_id]) if include_self else set()
+    stack = [manager_user_id]
+
+    while stack:
+        mid = stack.pop()
         rows = (
-            db.session.query(EmployeeProfile.user_id)
+            EmployeeProfile.query
             .filter(EmployeeProfile.reporting_manager_user_id == mid)
+            .with_entities(EmployeeProfile.user_id)
             .all()
         )
         for (uid,) in rows:
-            if uid not in seen:
+            if uid is not None and uid not in seen:
                 seen.add(uid)
-                queue.append(uid)
+                stack.append(uid)
 
     return list(seen)
 
-def _opportunity_has_any_invoice(opportunity_id: int) -> bool:
-    return (
-        db.session.query(func.count(Invoice.id))
-        .join(Quote, Quote.id == Invoice.quote_id)
-        .filter(Quote.opportunity_id == opportunity_id)
-        .scalar()
-        or 0
-    ) > 0
 
-def _calculate_tax_components(q: Quote):
+def _allowed_sales_user_ids():
     """
-    Returns (cgst, sgst, igst, total_tax)
-    GST applies ONLY when currency is INR AND gst flag is enabled.
+    Who can the current user see?
+    - quotes.view_all => everyone (None = no restriction)
+    - else => self + reportees
     """
+    if current_user.has_perm("quotes.view_all"):
+        return None
+    return _team_user_ids(current_user.id, include_self=True)
 
-    # ✅ GST only for INR
-    q_currency = (getattr(q, "currency", None) or "INR").strip().upper()
-    if q_currency != "INR":
-        return Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0")
-    
-    subtotal = _d(q.subtotal or 0, "0") - _d(q.discount or 0, "0")
-    if subtotal < 0:
-        subtotal = Decimal("0")
-
-    # Need company branch always for GST
-    company_branch = q.company_branch
-    if not company_branch or not (company_branch.state or "").strip():
-        return Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0")
-
-    # --- determine customer state ---
-    customer_state = ""
-    if q.branch_id and q.branch and (q.branch.state or "").strip():
-        customer_state = (q.branch.state or "").strip()
-    else:
-        customer_state = (getattr(q, "billing_state", "") or "").strip()
-
-    # If customer state missing OR GST not applicable -> no tax
-    if not customer_state or not getattr(q, "is_gst_applicable", True):
-        return Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0")
-
-    company_state = (company_branch.state or "").strip().lower()
-    customer_state_norm = customer_state.lower()
-
-    gst_rate = Decimal("18")
-
-    if company_state == customer_state_norm:
-        cgst = subtotal * Decimal("9") / Decimal("100")
-        sgst = subtotal * Decimal("9") / Decimal("100")
-        igst = Decimal("0")
-    else:
-        igst = subtotal * gst_rate / Decimal("100")
-        cgst = Decimal("0")
-        sgst = Decimal("0")
-
-    total_tax = cgst + sgst + igst
-    return cgst, sgst, igst, total_tax
 
 def _can_access_quote(q: Quote) -> bool:
-    if current_user.has_perm("quotes.view_all"):
+    allowed = _allowed_sales_user_ids()
+    if allowed is None:
         return True
-
-    allowed_ids = set(_team_user_ids(current_user.id, include_self=True))
 
     if q.created_by_id == current_user.id:
         return True
 
     opp_owner = q.opportunity.owner_id if q.opportunity else None
-    return (opp_owner in allowed_ids) if opp_owner else False
+    return (opp_owner in set(allowed)) if opp_owner else False
 
 
 def _require_quote_access(q: Quote):
@@ -128,12 +142,11 @@ def _require_quote_access(q: Quote):
 
 
 def _require_opp_access(opp: Opportunity):
-    if current_user.has_perm("quotes.view_all"):
+    allowed = _allowed_sales_user_ids()
+    if allowed is None:
         return
-    allowed_ids = set(_team_user_ids(current_user.id, include_self=True))
-    if opp.owner_id not in allowed_ids:
+    if opp.owner_id not in set(allowed):
         abort(403)
-
 
 # -------------------------
 # Helpers
@@ -389,6 +402,7 @@ def edit_quote(quote_id):
     if request.method == "POST":
         q.currency = (request.form.get("currency") or "INR").strip().upper()
 
+        # ✅ INR-only GST toggle
         if q.currency != "INR":
             q.is_gst_applicable = False
         else:
@@ -399,7 +413,7 @@ def edit_quote(quote_id):
         q.notes = (request.form.get("notes") or "").strip()
         q.billing_state = (request.form.get("billing_state") or "").strip() or None
         q.billing_gstin = (request.form.get("billing_gstin") or "").strip() or None
-        q.is_gst_applicable = True if request.form.get("is_gst_applicable") == "1" else False
+        
         if not q.company_branch_id and getattr(current_user, "company_branch_id", None):
             q.company_branch_id = current_user.company_branch_id
 
@@ -893,13 +907,18 @@ def download_proposal(quote_id):
         ["Discount", _money(discount)],
     ]
 
-    if (q.currency or "INR").strip().upper() == "INR":
-        totals_data += [
-            ["CGST (9%)", _money(q.cgst)],
-            ["SGST (9%)", _money(q.sgst)],
-            ["IGST (18%)", _money(q.igst)],
-            ["Total GST", _money(q.tax)],
-        ]
+    if (q.currency or "INR").strip().upper() == "INR" and getattr(q, "is_gst_applicable", False):
+        if _d(q.igst, "0") > 0:
+            totals_data += [
+                ["IGST (18%)", _money(q.igst)],
+                ["Total GST", _money(q.tax)],
+            ]
+        else:
+            totals_data += [
+                ["CGST (9%)", _money(q.cgst)],
+                ["SGST (9%)", _money(q.sgst)],
+                ["Total GST", _money(q.tax)],
+            ]
 
     totals_data += [
         ["Total Amount", _money(total)],
@@ -977,6 +996,7 @@ def mark_sent(quote_id):
 def list_quotes():
     qtext = (request.args.get("q") or "").strip()
     status_id = (request.args.get("status_id") or "").strip()
+    owner = (request.args.get("owner") or "").strip()
 
     sub = (db.session.query(
         Quote.opportunity_id.label("opp_id"),
@@ -992,11 +1012,21 @@ def list_quotes():
           .order_by(Quote.updated_at.desc(), Quote.id.desc()))
 
     if not current_user.has_perm("quotes.view_all"):
-        allowed_ids = _team_user_ids(current_user.id, include_self=True)
+        allowed_ids = _allowed_sales_user_ids()  # <-- will be list here, not None
         qs = qs.filter(or_(
             Quote.created_by_id == current_user.id,
             Opportunity.owner_id.in_(allowed_ids)
         ))
+    allowed_ids = _allowed_sales_user_ids()
+    # Owner filter (only meaningful when not view_all)
+    if owner == "me":
+        qs = qs.filter(Opportunity.owner_id == current_user.id)
+    elif owner.isdigit():
+        oid = int(owner)
+        if allowed_ids is None or oid in allowed_ids:
+            qs = qs.filter(Opportunity.owner_id == oid)
+        else:
+            qs = qs.filter(Opportunity.owner_id == current_user.id)
 
     if qtext:
         like = f"%{qtext}%"
@@ -1014,13 +1044,21 @@ def list_quotes():
 
     page = request.args.get("page", 1, type=int)
     pagination = qs.paginate(page=page, per_page=15, error_out=False)
+    owner_options = (
+        User.query.filter(User.id.in_(allowed_ids)).order_by(User.name.asc()).all()
+        if allowed_ids is not None
+        else User.query.filter_by(is_active=True).order_by(User.name.asc()).all()
+    )
+
 
     return render_template(
         "quotes/list.html",
         pagination=pagination,
         statuses=statuses,
         qtext=qtext,
-        status_id=status_id
+        status_id=status_id,
+        owner=owner, 
+        owner_options=owner_options
     )
 
 
@@ -1349,13 +1387,14 @@ def sent_proposals():
     sent = QuoteStatus.query.filter_by(name="Sent").first()
 
     qs = (Quote.query
-          .filter(Quote.status_id == (sent.id if sent else -1))
-          .filter(Quote.proposal_created_at.isnot(None))
-          .order_by(Quote.updated_at.desc(), Quote.id.desc()))
-
+      .join(Opportunity, Quote.opportunity_id == Opportunity.id)
+      .filter(Quote.status_id == (sent.id if sent else -1))
+      .filter(Quote.proposal_created_at.isnot(None))
+      .order_by(Quote.updated_at.desc(), Quote.id.desc()))
+    
     if not current_user.has_perm("quotes.view_all"):
-        allowed_ids = _team_user_ids(current_user.id, include_self=True)
-        qs = qs.join(Opportunity).filter(or_(
+        allowed_ids = _allowed_sales_user_ids()  # <-- will be list here, not None
+        qs = qs.filter(or_(
             Quote.created_by_id == current_user.id,
             Opportunity.owner_id.in_(allowed_ids)
         ))

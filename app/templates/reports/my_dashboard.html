@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .card-soft { border: 1px solid rgba(0,0,0,.06); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.04); }
+  .muted { color:#6c757d; }
+  .kpi { font-size: 1.35rem; font-weight: 800; }
+  .tiny { font-size: .85rem; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-1">My Dashboard</h4>
+    <div class="muted">A quick snapshot for <strong>{{ month_value }}</strong> ({{ my_role or "User" }}).</div>
+  </div>
+  <form method="GET" class="d-flex gap-2">
+    <input type="month" class="form-control" name="month" value="{{ month_value }}" style="max-width: 180px;">
+    <button class="btn btn-primary"><i class="bi bi-arrow-repeat me-1"></i>Go</button>
+  </form>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="card card-soft p-3">
+      <div class="muted tiny">Revenue (MTD)</div>
+      <div class="kpi">₹ {{ "%.2f"|format(revenue_mtd|float) }}</div>
+      <div class="muted tiny">Invoices this month: {{ invoices_mtd }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card card-soft p-3">
+      <div class="muted tiny">Outstanding (All)</div>
+      <div class="kpi">₹ {{ "%.2f"|format(outstanding_total|float) }}</div>
+      <div class="muted tiny">Top overdue shown below</div>
+    </div>
+  </div>
+
+  {% if my_role != "AM" %}
+  <div class="col-md-3">
+    <div class="card card-soft p-3">
+      <div class="muted tiny">Leads (MTD)</div>
+      <div class="kpi">{{ leads_mtd }}</div>
+      <div class="muted tiny">Opportunities (MTD): {{ opps_mtd }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card card-soft p-3">
+      <div class="muted tiny">Qualified Opps (MTD)</div>
+      <div class="kpi">{{ qualified_opps_mtd }}</div>
+      <div class="muted tiny">Qualified = stage/probability rule</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-md-3">
+    <div class="card card-soft p-3">
+      <div class="muted tiny">Active Clients</div>
+      <div class="kpi">{{ active_clients }}</div>
+      <div class="muted tiny">Dormant risk: {{ dormant_risk }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card card-soft p-3">
+      <div class="muted tiny">Inactive Clients</div>
+      <div class="kpi">{{ inactive_accounts }}</div>
+      <div class="muted tiny">Based on last invoice date</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card card-soft p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <h6 class="mb-0">Top Overdue</h6>
+          <div class="muted tiny">Highest days outstanding</div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Invoice</th>
+              <th>Client</th>
+              <th class="text-end">Remaining</th>
+              <th class="text-end">Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if overdue_top|length == 0 %}
+              <tr><td colspan="4" class="text-center muted py-3">No outstanding invoices 🎉</td></tr>
+            {% else %}
+              {% for r in overdue_top %}
+              <tr>
+                <td>
+                  <a class="text-decoration-none" href="{{ url_for('payments.invoice_payments', invoice_id=r.invoice.id) }}">
+                    #{{ r.invoice.id }}
+                  </a>
+                </td>
+                <td class="text-truncate" style="max-width:220px;">{{ r.client_name }}</td>
+                <td class="text-end">₹ {{ "%.2f"|format(r.remaining|float) }}</td>
+                <td class="text-end">{{ r.days_outstanding }}</td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card card-soft p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <h6 class="mb-0">Pending Payment Verifications</h6>
+          <div class="muted tiny">Payments waiting for finance action</div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Invoice</th>
+              <th>Date</th>
+              <th>Type</th>
+              <th class="text-end">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if pending_payments|length == 0 %}
+              <tr><td colspan="4" class="text-center muted py-3">No pending payments.</td></tr>
+            {% else %}
+              {% for p in pending_payments %}
+              <tr>
+                <td>
+                  <a class="text-decoration-none" href="{{ url_for('payments.invoice_payments', invoice_id=p.invoice_id) }}">
+                    #{{ p.invoice_id }}
+                  </a>
+                </td>
+                <td>{{ p.payment_date.strftime("%d-%b-%Y") if p.payment_date else "-" }}</td>
+                <td>{{ p.transfer_type }}</td>
+                <td class="text-end">₹ {{ "%.2f"|format(p.amount|float) }}</td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-2 tiny muted">
+        Note: Finance queue page is for finance users; this section shows pending items linked to you.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card card-soft p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <h6 class="mb-0">Margin Flags ({{ threshold }}% threshold)</h6>
+          <div class="muted tiny">Projects created in selected month</div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Project</th>
+              <th class="text-end">Contract</th>
+              <th class="text-end">Margin %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if flagged_projects|length == 0 %}
+              <tr><td colspan="3" class="text-center muted py-3">No flagged projects.</td></tr>
+            {% else %}
+              {% for r in flagged_projects %}
+              <tr>
+                <td>#{{ r.project.id }} — {{ r.project.name }}</td>
+                <td class="text-end">₹ {{ "%.2f"|format(r.contract_value|float) }}</td>
+                <td class="text-end">
+                  <span class="badge bg-danger">{{ "%.2f"|format(r.margin_percent|float) }}%</span>
+                </td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  {% if my_role == "AM" %}
+  <div class="col-lg-6">
+    <div class="card card-soft p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <h6 class="mb-0">Account Health</h6>
+          <div class="muted tiny">Top risk clients first</div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Client</th>
+              <th>Last Invoice</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if am_clients|length == 0 %}
+              <tr><td colspan="3" class="text-center muted py-3">No mapped clients found.</td></tr>
+            {% else %}
+              {% for r in am_clients %}
+              <tr>
+                <td class="text-truncate" style="max-width: 280px;">{{ r.client.company_name }}</td>
+                <td>{{ r.last_invoice_date.strftime("%d-%b-%Y") if r.last_invoice_date else "-" }}</td>
+                <td>
+                  {% if r.status == "Dormant Risk" %}
+                    <span class="badge bg-warning text-dark">{{ r.status }}</span>
+                  {% elif r.status == "Inactive" %}
+                    <span class="badge bg-danger">{{ r.status }}</span>
+                  {% else %}
+                    <span class="badge bg-success">{{ r.status }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

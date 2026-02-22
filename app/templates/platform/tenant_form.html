@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Tenant{% endblock %}
+{% block header %}Platform • Tenant{% endblock %}
+
+{% block content %}
+<div class="card card-soft">
+  <div class="card-body">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div>
+        <h5 class="mb-1">{{ "Edit Tenant" if tenant else "New Tenant" }}</h5>
+        <div class="text-muted small">Create / update tenant registry (platform database)</div>
+      </div>
+      <a class="btn btn-outline-secondary" href="{{ url_for('platform.tenants_list') }}">
+        <i class="bi bi-arrow-left"></i> Back
+      </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{cat}}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" enctype="multipart/form-data" class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Tenant Name</label>
+        <input class="form-control" name="name" required value="{{ tenant.name if tenant else '' }}">
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Slug</label>
+        <input class="form-control" name="slug" required value="{{ tenant.slug if tenant else '' }}">
+        <div class="form-text">Example: softech (used in subdomain)</div>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Active</label>
+        <select class="form-select" name="is_active">
+          <option value="1" {% if not tenant or tenant.is_active %}selected{% endif %}>Yes</option>
+          <option value="0" {% if tenant and not tenant.is_active %}selected{% endif %}>No</option>
+        </select>
+      </div>
+
+      <div class="col-12">
+        <label class="form-label">DB URI</label>
+        <input class="form-control" name="db_uri" required value="{{ tenant.db_uri if tenant else '' }}">
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">Start Date</label>
+        <input type="date" class="form-control" name="start_date"
+               value="{{ tenant.start_date.strftime('%Y-%m-%d') if tenant and tenant.start_date else '' }}">
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">End Date</label>
+        <input type="date" class="form-control" name="end_date"
+               value="{{ tenant.end_date.strftime('%Y-%m-%d') if tenant and tenant.end_date else '' }}">
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">Logo (png/jpg/webp)</label>
+        <input type="file" class="form-control" name="logo" accept=".png,.jpg,.jpeg,.webp">
+        <div class="form-text">Saved to <code>static/tenant_logos/&lt;slug&gt;.&lt;ext&gt;</code></div>
+      </div>
+
+      <div class="col-md-6 d-flex align-items-end">
+        {% if tenant and tenant.logo %}
+          <div class="border rounded p-2 w-100">
+            <div class="small text-muted mb-1">Current logo</div>
+            <img src="{{ url_for('static', filename='tenant_logos/' ~ tenant.logo) }}"
+                 style="max-height:56px; max-width:100%; object-fit:contain;">
+          </div>
+        {% endif %}
+      </div>
+
+      {% if not tenant %}
+        <hr class="my-2">
+        <div class="col-12">
+          <h6 class="mb-2">Tenant Admin (Seed)</h6>
+          <div class="text-muted small mb-2">These credentials will be created inside the tenant DB.</div>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Admin Email</label>
+          <input class="form-control" name="admin_email" type="email" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Admin Name</label>
+          <input class="form-control" name="admin_name">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Admin Password</label>
+          <input class="form-control" name="admin_password" type="password" required>
+        </div>
+      {% endif %}
+
+      <div class="col-12 d-flex justify-content-end gap-2 mt-2">
+        <button class="btn btn-primary">
+          <i class="bi bi-check2"></i> {{ "Update" if tenant else "Create" }}
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

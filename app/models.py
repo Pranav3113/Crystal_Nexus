@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from flask_login import UserMixin
 from sqlalchemy import func
@@ -622,7 +622,7 @@ class Quote(db.Model):
     is_gst_applicable = db.Column(db.Boolean, default=True)
 
     def collected_amount(self):
-        from .models import Invoice, InvoicePayment  # if same file, you can remove this import line
+        
         amt = (db.session.query(func.coalesce(func.sum(InvoicePayment.amount), 0))
             .join(Invoice, Invoice.id == InvoicePayment.invoice_id)
             .filter(Invoice.quote_id == self.id)
@@ -1022,7 +1022,8 @@ class ProjectCost(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False, index=True)
     project = db.relationship("Project", backref=db.backref("costs", lazy="dynamic", cascade="all, delete-orphan"))
 
-    cost_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
+    
+    cost_date = db.Column(db.Date, nullable=False, default=date.today)
     cost_head = db.Column(db.String(120), nullable=False)  # e.g. Vendor, Resource, Travel, Tools
     vendor_name = db.Column(db.String(200), nullable=True)
 

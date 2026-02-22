@@ -1,7 +1,7 @@
-from datetime import date, timedelta
+from datetime import date, time, timedelta, datetime
 from calendar import monthrange
 from decimal import Decimal
-
+from sqlalchemy import or_, and_, func
 from flask import Blueprint, render_template, request, make_response
 from flask_login import login_required
 
@@ -15,7 +15,7 @@ from ..models import (
     Invoice,
     Project, Client,
     MarginSettings,
-    Cluster,
+    Cluster,InvoicePayment,
 )
 
 reports_bp = Blueprint("reports", __name__, template_folder="../templates")
@@ -136,20 +136,13 @@ def _role(u: User):
 
 
 def _qualified_stage_filter():
-    """
-    Define "Qualified opportunity" heuristics.
-    If you want stricter definition later, update here only.
-    """
-    # Prefer probability >= 50 OR stage name contains keywords.
-    keywords = ("QUAL", "PROPOS", "NEGOT", "WON")
-    return db.or_(
+    return or_(
         PipelineStage.probability >= 50,
-        db.func.upper(PipelineStage.name).like("%QUAL%"),
-        db.func.upper(PipelineStage.name).like("%PROPOS%"),
-        db.func.upper(PipelineStage.name).like("%NEGOT%"),
-        db.func.upper(PipelineStage.name).like("%WON%"),
+        func.upper(PipelineStage.name).like("%QUAL%"),
+        func.upper(PipelineStage.name).like("%PROPOS%"),
+        func.upper(PipelineStage.name).like("%NEGOT%"),
+        func.upper(PipelineStage.name).like("%WON%"),
     )
-
 
 def _safe_dec(v):
     try:
@@ -192,7 +185,8 @@ def cluster_productivity():
             )
             .join(Quote, Quote.id == Invoice.quote_id)
             .join(Opportunity, Opportunity.id == Quote.opportunity_id)
-            .filter(Invoice.invoice_date >= start_date, Invoice.invoice_date <= end_date))
+            .filter(Invoice.invoice_date >= start_date, Invoice.invoice_date <= end_date)
+            .filter(Invoice.status != "Cancelled"))
 
     if allowed_ids:
         rev_qs = rev_qs.filter(Opportunity.owner_id.in_(allowed_ids))
@@ -402,7 +396,11 @@ def cluster_margin_quality():
           .join(Opportunity, Quote.opportunity_id == Opportunity.id)
           .outerjoin(Client, Project.client_id == Client.id))
 
-    qs = qs.filter(Project.created_at >= start_date, Project.created_at <= end_date)
+    
+    dt_from = datetime.combine(start_date, time.min)
+    dt_to   = datetime.combine(end_date, time.max)
+
+    qs = qs.filter(Project.created_at >= dt_from, Project.created_at <= dt_to)
 
     if client_id.isdigit():
         qs = qs.filter(Project.client_id == int(client_id))
@@ -418,9 +416,9 @@ def cluster_margin_quality():
     # Else -> belongs to opp owner (BD)
     if allowed_ids:
         qs = qs.filter(
-            db.or_(
+            or_(
                 Project.account_manager_user_id.in_(allowed_ids),
-                db.and_(
+                and_(
                     Project.account_manager_user_id.is_(None),
                     Opportunity.owner_id.in_(allowed_ids)
                 )
@@ -777,3 +775,259 @@ def cluster_account_health():
         return _render_pdf(html, f"cluster_account_health_{y:04d}-{m:02d}.pdf")
 
     return render_template(tpl, **ctx)
+
+# -------------------------
+# Consolidated: My Dashboard (Individual)
+# -------------------------
+@reports_bp.route("/reports/my-dashboard", methods=["GET"])
+@login_required
+def my_dashboard():
+    # NOTE:
+    # If you want permission control, uncomment this:
+    # require_perm("admin.dashboard.view")(lambda: None)()
+
+    month_str = (request.args.get("month") or "").strip()
+    y, m = _parse_month(month_str)
+    start_date, end_date = _month_bounds(y, m)
+    today = date.today()
+
+    from flask_login import current_user
+    me = current_user
+
+    my_role = _role(me)
+
+    # -------------------------
+    # MTD Revenue (Invoices in selected month) for "my responsibility"
+    # BD: opp owner
+    # AM: projects where account_manager_user_id = me.id (invoices client-based)
+    # Fallback: opp owner only
+    # -------------------------
+    inv_q = (Invoice.query
+             .join(Quote, Invoice.quote_id == Quote.id)
+             .join(Opportunity, Quote.opportunity_id == Opportunity.id)
+             .filter(Invoice.invoice_date >= start_date, Invoice.invoice_date <= end_date)
+             .filter(Invoice.status != "Cancelled"))
+
+    if my_role == "AM":
+        # invoices tied to my clients (via Invoice.client_id)
+        my_client_ids = (db.session.query(db.distinct(Project.client_id))
+                         .filter(Project.account_manager_user_id == me.id)
+                         .filter(Project.client_id.isnot(None))
+                         .all())
+        my_client_ids = [int(x[0]) for x in my_client_ids if x and x[0]]
+        if my_client_ids:
+            inv_q = inv_q.filter(Invoice.client_id.in_(my_client_ids))
+        else:
+            # AM with no mapped clients -> show nothing (safe)
+            inv_q = inv_q.filter(db.text("1=0"))
+    else:
+        # BD / default
+        inv_q = inv_q.filter(Opportunity.owner_id == me.id)
+
+    inv_mtd = inv_q.order_by(Invoice.invoice_date.desc(), Invoice.id.desc()).all()
+
+    revenue_mtd = sum([_safe_dec(i.total_amount) for i in inv_mtd], Decimal("0"))
+
+    # outstanding (all-time outstanding in their scope)
+    inv_out_q = (Invoice.query
+                 .join(Quote, Invoice.quote_id == Quote.id)
+                 .join(Opportunity, Quote.opportunity_id == Opportunity.id)
+                 .filter(Invoice.status != "Cancelled"))
+
+    if my_role == "AM":
+        my_client_ids2 = (db.session.query(db.distinct(Project.client_id))
+                          .filter(Project.account_manager_user_id == me.id)
+                          .filter(Project.client_id.isnot(None))
+                          .all())
+        my_client_ids2 = [int(x[0]) for x in my_client_ids2 if x and x[0]]
+        if my_client_ids2:
+            inv_out_q = inv_out_q.filter(Invoice.client_id.in_(my_client_ids2))
+        else:
+            inv_out_q = inv_out_q.filter(db.text("1=0"))
+    else:
+        inv_out_q = inv_out_q.filter(Opportunity.owner_id == me.id)
+
+    inv_all = inv_out_q.order_by(Invoice.id.desc()).all()
+
+    outstanding_total = Decimal("0")
+    overdue_top = []
+    for inv in inv_all:
+        rem = _safe_dec(inv.remaining_amount() or 0)
+        if rem <= 0:
+            continue
+        due = inv.due_date or inv.invoice_date
+        days_out = (today - due).days if due else 0
+        outstanding_total += rem
+        overdue_top.append({
+            "invoice": inv,
+            "remaining": rem,
+            "due_date": due,
+            "days_outstanding": days_out,
+            "client_name": (inv.client.company_name if getattr(inv, "client", None) else "—"),
+        })
+    overdue_top = sorted(overdue_top, key=lambda r: r["days_outstanding"], reverse=True)[:8]
+
+    # -------------------------
+    # Pipeline snapshot (BD-oriented)
+    # -------------------------
+    leads_mtd = 0
+    opps_mtd = 0
+    qualified_opps_mtd = 0
+
+    if my_role != "AM":
+        leads_mtd = (Lead.query
+                     .filter(Lead.owner_id == me.id)
+                     .filter(Lead.created_at >= start_date, Lead.created_at <= end_date)
+                     .count())
+
+        opp_qs = (Opportunity.query
+                  .join(PipelineStage, Opportunity.stage_id == PipelineStage.id)
+                  .filter(Opportunity.owner_id == me.id)
+                  .filter(Opportunity.created_at >= start_date, Opportunity.created_at <= end_date))
+
+        opps_mtd = opp_qs.count()
+        qualified_opps_mtd = opp_qs.filter(_qualified_stage_filter()).count()
+
+    # -------------------------
+    # Margin flags (projects created in month)
+    # -------------------------
+    threshold = _margin_threshold()
+
+    dt_from = datetime.combine(start_date, time.min)
+    dt_to   = datetime.combine(end_date, time.max)
+
+    proj_q = (Project.query
+            .join(Quote, Project.quote_id == Quote.id)
+            .join(Opportunity, Quote.opportunity_id == Opportunity.id)
+            .filter(Project.created_at >= dt_from, Project.created_at <= dt_to))
+
+    if my_role == "AM":
+        proj_q = proj_q.filter(Project.account_manager_user_id == me.id)
+    else:
+        # BD: projects with no AM, owned by BD OR if AM assigned, still show if opp owner is me (useful for BD visibility)
+        proj_q = proj_q.filter(Opportunity.owner_id == me.id)
+
+    projects = proj_q.order_by(Project.id.desc()).all()
+
+    flagged_projects = []
+    for p in projects:
+        mp = _safe_dec(p.margin_percent)
+        if mp < threshold:
+            flagged_projects.append({
+                "project": p,
+                "margin_percent": mp,
+                "contract_value": _safe_dec(p.contract_value),
+            })
+    flagged_projects = flagged_projects[:8]
+
+    # -------------------------
+    # Pending finance verifications affecting "my" invoices (optional)
+    # -------------------------
+    pending_payments = (InvoicePayment.query
+                        .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
+                        .join(Quote, Invoice.quote_id == Quote.id)
+                        .join(Opportunity, Quote.opportunity_id == Opportunity.id)
+                        .filter(InvoicePayment.status == "Pending"))
+
+    if my_role == "AM":
+        # by my client set
+        my_client_ids3 = (db.session.query(db.distinct(Project.client_id))
+                          .filter(Project.account_manager_user_id == me.id)
+                          .filter(Project.client_id.isnot(None))
+                          .all())
+        my_client_ids3 = [int(x[0]) for x in my_client_ids3 if x and x[0]]
+        if my_client_ids3:
+            pending_payments = pending_payments.filter(Invoice.client_id.in_(my_client_ids3))
+        else:
+            pending_payments = pending_payments.filter(db.text("1=0"))
+    else:
+        pending_payments = pending_payments.filter(Opportunity.owner_id == me.id)
+
+    pending_payments = pending_payments.order_by(InvoicePayment.created_at.desc()).limit(8).all()
+
+    # -------------------------
+    # AM Account health quick view (if AM)
+    # -------------------------
+    am_clients = []
+    active_clients = dormant_risk = inactive_accounts = 0
+    if my_role == "AM":
+        ref_date = min(date.today(), end_date)
+
+        my_client_ids4 = (db.session.query(db.distinct(Project.client_id))
+                          .filter(Project.account_manager_user_id == me.id)
+                          .filter(Project.client_id.isnot(None))
+                          .all())
+        my_client_ids4 = [int(x[0]) for x in my_client_ids4 if x and x[0]]
+
+        clients_map = {}
+        if my_client_ids4:
+            cl = Client.query.filter(Client.id.in_(my_client_ids4)).all()
+            clients_map = {c.id: c for c in cl}
+
+        def _last_invoice_date(client_id):
+            return (db.session.query(db.func.max(Invoice.invoice_date))
+                    .filter(Invoice.client_id == client_id)
+                    .filter(Invoice.status != "Cancelled")
+                    .scalar())
+
+        for cid in my_client_ids4:
+            c = clients_map.get(cid)
+            if not c:
+                continue
+
+            last_inv = _last_invoice_date(cid)
+            status = "Active"
+            if last_inv is None:
+                status = "Inactive"
+            else:
+                gap = (ref_date - last_inv).days
+                if gap > 90:
+                    status = "Inactive"
+                elif gap > 60:
+                    status = "Dormant Risk"
+                else:
+                    status = "Active"
+
+            if status == "Active":
+                active_clients += 1
+            elif status == "Dormant Risk":
+                dormant_risk += 1
+            else:
+                inactive_accounts += 1
+
+            am_clients.append({
+                "client": c,
+                "last_invoice_date": last_inv,
+                "status": status,
+            })
+
+        # show risk first
+        am_clients = sorted(am_clients, key=lambda x: (0 if x["status"] == "Dormant Risk" else 1, x["client"].company_name))[:10]
+
+    return render_template(
+        "reports/my_dashboard.html",
+        month_value=f"{y:04d}-{m:02d}",
+        start_date=start_date,
+        end_date=end_date,
+        my_role=my_role,
+
+        revenue_mtd=revenue_mtd,
+        invoices_mtd=len(inv_mtd),
+
+        outstanding_total=outstanding_total,
+        overdue_top=overdue_top,
+
+        leads_mtd=leads_mtd,
+        opps_mtd=opps_mtd,
+        qualified_opps_mtd=qualified_opps_mtd,
+
+        threshold=threshold,
+        flagged_projects=flagged_projects,
+
+        pending_payments=pending_payments,
+
+        active_clients=active_clients,
+        dormant_risk=dormant_risk,
+        inactive_accounts=inactive_accounts,
+        am_clients=am_clients,
+    )

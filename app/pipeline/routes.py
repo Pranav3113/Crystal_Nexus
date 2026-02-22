@@ -1,10 +1,10 @@
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 
 from .. import db
 from ..utils import require_perm
-from ..models import PipelineStage, Opportunity, OpportunityStageHistory, Lead
+from ..models import PipelineStage, Opportunity, OpportunityStageHistory, Lead, EmployeeProfile
 
 pipeline_bp = Blueprint("pipeline", __name__, template_folder="../templates")
 
@@ -15,12 +15,46 @@ def _opp_code_next():
     return f"OP-{nxt:06d}"
 
 
+def _team_user_ids(manager_user_id: int, include_self: bool = True):
+    seen = set([manager_user_id]) if include_self else set()
+    stack = [manager_user_id]
+    while stack:
+        mid = stack.pop()
+        rows = (EmployeeProfile.query
+                .filter(EmployeeProfile.reporting_manager_user_id == mid)
+                .with_entities(EmployeeProfile.user_id)
+                .all())
+        for (uid,) in rows:
+            if uid is not None and uid not in seen:
+                seen.add(uid)
+                stack.append(uid)
+    return list(seen)
+
+def _allowed_owner_ids():
+    if current_user.has_perm("pipeline.view_all"):
+        return None
+    return _team_user_ids(current_user.id, include_self=True)
+
+def _require_opp_access(o: Opportunity):
+    allowed = _allowed_owner_ids()
+    if allowed is None:
+        return
+    if o.owner_id not in set(allowed):
+        abort(403)
+
+
 @pipeline_bp.route("/")
 @login_required
 @require_perm("pipeline.view")
 def board():
     stages = PipelineStage.query.filter_by(is_active=True).order_by(PipelineStage.sort_order.asc()).all()
-    opps = Opportunity.query.order_by(Opportunity.updated_at.desc()).all()
+
+    qs = Opportunity.query.order_by(Opportunity.updated_at.desc())
+    allowed = _allowed_owner_ids()
+    if allowed is not None:
+        qs = qs.filter(Opportunity.owner_id.in_(allowed))
+
+    opps = qs.all()
 
     grouped = {s.id: [] for s in stages}
     for o in opps:
@@ -111,6 +145,7 @@ def create():
 @require_perm("pipeline.move")
 def move(opp_id):
     o = Opportunity.query.get_or_404(opp_id)
+    _require_opp_access(o)
     to_stage_id = request.form.get("to_stage_id")
 
     if not (to_stage_id and to_stage_id.isdigit()):
